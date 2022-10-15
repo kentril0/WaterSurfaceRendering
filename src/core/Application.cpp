@@ -23,8 +23,10 @@ namespace vkp
     {
         VKP_REGISTER_FUNCTION();
 
+
         // Wait before issuing members' destructors
-        m_Device->WaitIdle();
+        if (m_Device != nullptr)
+            m_Device->WaitIdle();
 
         // before swap chain destroy: pipeline, renderpass
     }
@@ -36,8 +38,6 @@ namespace vkp
 
         SetupWindow();
         SetupVulkan();
-
-        SetupGUI();
 
         this->Start();
 
@@ -75,7 +75,7 @@ namespace vkp
             uint32_t frameIndex;
             if (m_SwapChain->AcquireNextImage(&frameIndex) != VK_SUCCESS)
                 continue;
-
+        /*
             m_Gui->NewFrame();
             {
                 if (!ImGui::Begin("Application Configuration"))
@@ -88,7 +88,8 @@ namespace vkp
                 ImGui::End();
             }
 
-            this->OnImGuiRender();
+        */
+            //this->OnImGuiRender();
 
             std::vector<VkPipelineStageFlags> waitStages;
             std::vector<VkCommandBuffer> cmdBuffers;
@@ -117,57 +118,23 @@ namespace vkp
         m_Device->WaitIdle();
     }
 
-    void Application::Render(
-        uint32_t frameIndex,
-        Timestep dt,
-        std::vector<VkPipelineStageFlags>& stagesToWait,
-        std::vector<VkCommandBuffer>& buffersToSubmit)
-    {
-        auto& drawCmdPool = m_DrawCmdPools[frameIndex];
-        drawCmdPool->Reset();
-    
-        vkp::CommandBuffer& commandBuffer = drawCmdPool->Front();
-        commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        {
-            BeginRenderPass(
-                commandBuffer,
-                m_SwapChain->GetFramebuffer(frameIndex)
-            );
-
-            m_Gui->Render(commandBuffer);
-
-            vkCmdEndRenderPass(commandBuffer);
-        }
-        commandBuffer.End();
-
-        stagesToWait.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-        buffersToSubmit.push_back(commandBuffer);
-    }
-
-    void Application::BeginRenderPass(
-        VkCommandBuffer commandBuffer,
-        VkFramebuffer framebuffer)
-    {
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = *m_RenderPass;
-        renderPassInfo.framebuffer = framebuffer;
-
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
-
-        renderPassInfo.clearValueCount = 
-            static_cast<uint32_t>(m_ClearValues.size());
-        renderPassInfo.pClearValues = m_ClearValues.data();
-
-        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, 
-                             VK_SUBPASS_CONTENTS_INLINE);
-    }
-
     // =============================================================================
     // =============================================================================
     // Setup functions
     // =============================================================================
+
+    void Application::SetupWindow()
+    {
+        m_Window = std::make_unique<Window>(m_Name.c_str());
+
+        // Register window callbacks
+        m_Window->SetUserPointer(this);
+        m_Window->SetFramebufferSizeCallback(Application::FramebufferResizeCallback);
+        m_Window->SetCursorPosCallback(Application::OnMouseMoveCallback);
+        m_Window->SetMouseButtonCallback(Application::OnMousePressedCallback);
+        m_Window->SetKeyCallback(Application::OnKeyPressedCallback);
+        m_Window->SetCursorEnterCallback(Application::OnCursorEnterCallback);
+    }
 
     void Application::SetupVulkan()
     {
@@ -181,26 +148,7 @@ namespace vkp
 
         SetupSwapChain();
 
-        CreateRenderPass();
-        m_SwapChain->CreateFramebuffers(*m_RenderPass);
-
-        CreateDrawCommandPools();
         CreateTransferCommandPool();
-
-        CreateDrawCommandBuffers();
-    }
-
-    void Application::SetupWindow()
-    {
-        m_Window = std::make_unique<Window>(m_Name.c_str());
-
-        // Register window callbacks
-        m_Window->SetUserPointer(this);
-        m_Window->SetFramebufferSizeCallback(Application::FramebufferResizeCallback);
-        m_Window->SetCursorPosCallback(Application::OnMouseMoveCallback);
-        m_Window->SetMouseButtonCallback(Application::OnMousePressedCallback);
-        m_Window->SetKeyCallback(Application::OnKeyPressedCallback);
-        m_Window->SetCursorEnterCallback(Application::OnCursorEnterCallback);
     }
 
     void Application::CreateInstance()
@@ -216,18 +164,11 @@ namespace vkp
 
     void Application::CreateDevice()
     {
-        Device::Requirements requirements{};
-        requirements.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-        requirements.deviceFeatures.fillModeNonSolid = VK_TRUE;
-        requirements.deviceFeatures.samplerAnisotropy = VK_TRUE;
-        requirements.queueFamilies = { VK_QUEUE_GRAPHICS_BIT };
-        requirements.presentationSupport = true;
-
         std::vector<VkPhysicalDevice> physicalDevices =
             m_Instance->GetPhysicalDevices();
         VKP_ASSERT_MSG(physicalDevices.size() > 0, "No physical devices found");
 
-        m_Device = std::make_unique<Device>(requirements, physicalDevices);
+        m_Device = std::make_unique<Device>(m_Requirements, physicalDevices);
     }
 
     void Application::CreateSurface()
@@ -270,30 +211,6 @@ namespace vkp
         }
     }
 
-    void Application::SetupGUI()
-    {
-        VKP_REGISTER_FUNCTION();
-
-        m_Gui = std::make_unique<Gui>(*m_Instance, *m_Device, *m_SwapChain);
-
-        CreateImGuiContext();
-    }
-
-    void Application::CreateImGuiContext()
-    {
-        VKP_REGISTER_FUNCTION();
-
-        m_Gui->SetupContext(*m_Window, *m_RenderPass);
-
-        CommandBuffer& cmdBuffer = BeginOneTimeCommands();
-
-            m_Gui->UploadFonts(cmdBuffer.buffer);
-
-        EndOneTimeCommands(cmdBuffer);
-
-        m_Gui->DestroyFontUploadObjects();
-    }
-
     // =============================================================================
     // =============================================================================
     // Create functions 
@@ -317,17 +234,18 @@ namespace vkp
 
         VKP_ASSERT_RESULT(m_Device->WaitIdle());
 
-        m_RenderPass->Destroy();
-        DestroyDrawCommandPools();
+        //m_RenderPass->Destroy();
+        //DestroyDrawCommandPools();
         m_SwapChain->Create(width, height, m_DepthTestingEnabled);
 
+    /*
         CreateRenderPass();
         m_SwapChain->CreateFramebuffers(*m_RenderPass);
         CreateDrawCommandPools();
         CreateDrawCommandBuffers();
 
         m_Gui->Recreate();
-
+    */
         // TODO recreate anything based on number of framebuffers
         this->OnFrameBufferResize(width, height);
 
@@ -441,56 +359,5 @@ namespace vkp
         app->OnCursorEntered(entered);
     }
 
-    void Application::CreateRenderPass()
-    {
-        VKP_REGISTER_FUNCTION();
-
-        m_RenderPass.reset(
-            new RenderPass(
-                *m_Device,
-                m_SwapChain->GetImageFormat(),
-                m_SwapChain->GetDepthAttachmentFormat())
-        );
-
-        m_RenderPass->Create(m_SwapChain->HasDepthAttachment());
-    }
-
-    void Application::CreateDrawCommandPools()
-    {
-        VKP_REGISTER_FUNCTION();
-        // A command pool for each frame that is going to reset its buffers 
-        //  every time
-        // TODO maybe on recreate
-        const uint32_t kImageCount = m_SwapChain->GetImageCount();
-
-        m_DrawCmdPools.reserve(kImageCount);
-
-        for (uint32_t i = 0; i < kImageCount; ++i)
-        {
-            m_DrawCmdPools.emplace_back(
-                std::make_unique<vkp::CommandPool>(
-                    *m_Device,
-                    vkp::QFamily::Graphics,
-                    VK_COMMAND_POOL_CREATE_TRANSIENT_BIT    // short-lived
-                )
-            );
-        }
-    }
-
-    void Application::CreateDrawCommandBuffers()
-    {
-        VKP_REGISTER_FUNCTION();
-        const uint32_t kBuffersPerFrame = 1;
-
-        for (auto& commandPool : m_DrawCmdPools)
-        {
-            commandPool->AllocateCommandBuffers(kBuffersPerFrame);
-        }
-    }
-
-    void Application::DestroyDrawCommandPools()
-    {
-        m_DrawCmdPools.clear();
-    }
 
 } // namespace vkp

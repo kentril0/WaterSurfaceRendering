@@ -53,26 +53,17 @@ namespace vkp
 
     protected:
         /** @brief Called once in "Run" function, before the main loop */
-        //virtual void Start() = 0;
-        void Start() {}
+        virtual void Start() = 0;
         
         /** @brief Called each frame, before rendering */
-        //virtual void Update(Timestep deltaTime) = 0;
-        void Update(Timestep deltaTime) {}
-
-        // TODO brief actualy sets geometry
-        //virtual void OnImGuiRender() = 0;
-        void OnImGuiRender() {}
+        virtual void Update(Timestep deltaTime) = 0;
 
         /** @brief Render call, called each frame */
-        //virtual void Render(Timestep deltaTime) = 0;
-        void Render(
+        virtual void Render(
             uint32_t frameIndex,
             Timestep dt,
             std::vector<VkPipelineStageFlags>& stagesToWait,
-            std::vector<VkCommandBuffer>& buffersToSubmit);
-
-
+            std::vector<VkCommandBuffer>& buffersToSubmit) = 0;
 
         // Callbacks - conforming to GLFW interface
         // TODO need virtual?
@@ -119,6 +110,15 @@ namespace vkp
         AppCmdLineArgs m_Args{};
 
         Timer m_StartTimer;    ///< Time elapsed since the 'Run()' issued
+
+        // Set for Custom device requirements
+        Device::Requirements m_Requirements{
+            .deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+            .deviceFeatures = {},
+            .queueFamilies = { VK_QUEUE_GRAPHICS_BIT },
+            .deviceExtensions = {},
+            .presentationSupport = true
+        };
         
         // =====================================================================
         // Order of declaration is important!
@@ -130,10 +130,6 @@ namespace vkp
 
         std::unique_ptr<SwapChain> m_SwapChain;
 
-        std::unique_ptr<RenderPass> m_RenderPass;
-
-        std::vector< std::unique_ptr<CommandPool> > m_DrawCmdPools{ };
-
         // -------------------------------------------------------------------------
         // Command pools and buffers 
         //  *using UNIFIED QUEUE for both GRAPHICS and TRANSFER commands*
@@ -141,19 +137,10 @@ namespace vkp
 
         // Used for issuing transfer commands
         std::unique_ptr<CommandPool> m_TransferCmdPool{ nullptr };
-
-
-        std::unique_ptr<Gui> m_Gui{ nullptr };
-
+        
         float m_LastFrameTime      { 0.0f };
         bool  m_FramebufferResized { false };
         bool m_DepthTestingEnabled{ false };
-
-    std::array<VkClearValue, 2> m_ClearValues{
-        VkClearValue{ 0.118f, 0.235f, 0.314f, 1.0f }, // clear color
-        VkClearValue{ 1.0f, 0.0f, 0.0f, 0.0f }  // clear depth, stencil
-    };
-
 
     private:
         void Init();
@@ -166,24 +153,11 @@ namespace vkp
         void CreateDevice();
         void CreateSurface();
         void SetupSwapChain();
-        void SetupGUI();
 
         void SetPhysicalDevicePresentationSupport();
 
         void RecreateSwapChain();
-        void CreateFramebuffers();
         void CreateTransferCommandPool();
-        void CreateImGuiContext();
-
-        // TODO client
-
-        void CreateRenderPass();
-        void CreateDrawCommandPools();
-        void CreateDrawCommandBuffers();
-
-        void BeginRenderPass(VkCommandBuffer cmdBuffer,
-                             VkFramebuffer framebuffer);
-        void DestroyDrawCommandPools();
 
         // ----------------------------------------------------------------------
 
