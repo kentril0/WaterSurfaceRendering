@@ -12,7 +12,6 @@
 
 namespace vkp
 {
-
     /**
      * @brief Queue Family type
      *  Used as an index into instance of "QFamilyIndices"
@@ -102,7 +101,9 @@ namespace vkp
         Queues() : arr{ VK_NULL_HANDLE } {}
     };
 
+
 } // namespace vkp
 
 
 #endif // WATER_SURFACE_RENDERING_VULKAN_QUEUE_TYPES_H_
+

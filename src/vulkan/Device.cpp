@@ -33,7 +33,6 @@ namespace vkp
         std::multimap<int, PhysicalDevice> candidates =
             GetSuitablePhysicalDevices(physicalDevices, requirements);
 
-        // TODO rend, rbegin
         const auto kBestCandidate = candidates.rbegin();
         const bool kBestCandidateIsSuitable = !candidates.empty() &&
                                               kBestCandidate->first > 0;
@@ -123,8 +122,8 @@ namespace vkp
             }
         }
     }
-
     void Device::RetrievePresentQueueHandle()
+
     {
         const auto& kQueueIndices = m_PhysicalDevice.GetQueueFamilyIndices();
         const uint32_t kQueueIndex = 0;
@@ -161,6 +160,7 @@ namespace vkp
         for (const auto& device : physicalDevices)
         {
             PhysicalDevice physDevice(device);
+            physDevice.PrintLogTraceProperties();
 
             const int kScore = RateDeviceSuitability(physDevice, requirements);
 

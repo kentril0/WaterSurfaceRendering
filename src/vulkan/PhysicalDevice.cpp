@@ -120,6 +120,7 @@ namespace vkp
 
     bool PhysicalDevice::HasFeatures(VkPhysicalDeviceFeatures reqFeatures) const
     {
+        VKP_REGISTER_FUNCTION();
         // Compare struct members using pointers 
 
         const VkBool32* pReqFeature = (VkBool32*)(&reqFeatures);
@@ -144,6 +145,7 @@ namespace vkp
     bool PhysicalDevice::HasExtensions(
         const std::vector<const char*>& reqDeviceExtensions) const
     {
+        VKP_REGISTER_FUNCTION();
         std::set<std::string> requiredExtensions(reqDeviceExtensions.begin(),
                                                  reqDeviceExtensions.end());
 

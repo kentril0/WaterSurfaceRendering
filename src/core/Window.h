@@ -14,6 +14,10 @@ namespace vkp
     class Window
     {
     public:
+        /**
+         * @brief Initializes GLFW, creates window, and checks whether Vulkan
+         *  is supported.
+         */
         Window(const char* title, 
                int width = VKP_DEFAULT_WINDOW_WIDTH, 
                int height = VKP_DEFAULT_WINDOW_HEIGHT);
