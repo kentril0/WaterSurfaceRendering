@@ -1,3 +1,7 @@
+/**
+ *  Copyright (c) 2022 WaterSurfaceRendering authors Distributed under MIT License
+ * (http://opensource.org/licenses/MIT)
+ */
 
 #ifndef WATER_SURFACE_RENDERING_VULKAN_RENDER_PASS_H_
 #define WATER_SURFACE_RENDERING_VULKAN_RENDER_PASS_H_

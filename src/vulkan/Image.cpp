@@ -1,3 +1,7 @@
+/**
+ *  Copyright (c) 2022 WaterSurfaceRendering authors Distributed under MIT License
+ * (http://opensource.org/licenses/MIT)
+ */
 
 #include "pch.h"
 #include "vulkan/Image.h"
