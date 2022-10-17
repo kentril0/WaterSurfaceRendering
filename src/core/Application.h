@@ -111,6 +111,8 @@ namespace vkp
 
         Timer m_StartTimer;    ///< Time elapsed since the 'Run()' issued
 
+        // TODO Application has only one device, for now
+        //  -> by default, this device must support presentation
         // Set for Custom device requirements
         Device::Requirements m_Requirements{
             .deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
@@ -123,10 +125,10 @@ namespace vkp
         // =====================================================================
         // Order of declaration is important!
     
-        std::unique_ptr<Window> m_Window;
-        std::unique_ptr<Instance>  m_Instance;
-        std::unique_ptr<Surface>   m_Surface;
-        std::unique_ptr<Device>    m_Device;
+        std::unique_ptr<Window>   m_Window;
+        std::unique_ptr<Instance> m_Instance;
+        std::unique_ptr<Surface>  m_Surface;
+        std::unique_ptr<Device>   m_Device;
 
         std::unique_ptr<SwapChain> m_SwapChain;
 
@@ -154,7 +156,10 @@ namespace vkp
         void CreateSurface();
         void SetupSwapChain();
 
-        void SetPhysicalDevicePresentationSupport();
+        /** @brief Makes the device (logical, and the selected physical)
+         *  support presentation. For now, applies to the only device.
+         */
+        bool MakeDeviceSupportPresentation(/*Device& device*/);
 
         void RecreateSwapChain();
         void CreateTransferCommandPool();

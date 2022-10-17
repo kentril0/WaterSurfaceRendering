@@ -49,7 +49,10 @@ namespace vkp
             const std::vector<VkQueueFlagBits>& reqQFamilies) const;
 
         void SetEnabledFeatures(VkPhysicalDeviceFeatures features);
+
         void AddEnabledExtensions(const std::vector<const char*>& extensions);
+        bool HasEnabledExtensions(
+            const std::vector<const char*>& extensions) const;
 
         /**
          * @brief Requests the support of required swap chain extensions,

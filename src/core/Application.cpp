@@ -141,11 +141,6 @@ namespace vkp
         CreateInstance();
         CreateDevice();
         CreateSurface();
-
-        bool presentationSupportRequired = true;
-        if (presentationSupportRequired)
-            SetPhysicalDevicePresentationSupport();
-
         SetupSwapChain();
 
         CreateTransferCommandPool();
@@ -177,30 +172,36 @@ namespace vkp
         m_Surface = std::make_unique<Surface>(*m_Instance, surface);
     }
 
-    void Application::SetPhysicalDevicePresentationSupport()
+    bool Application::MakeDeviceSupportPresentation()
     {
         // Selected physical device must support swap chain creation
         //  and presentation
 
         auto& physDevice = m_Device->GetPhysicalDevice();
 
-        bool supportsPresent = physDevice.RequestSwapChainSupport(*m_Surface);
-        VKP_ASSERT_MSG(supportsPresent,
+        bool swapChainSupported = physDevice.HasEnabledExtensions(
+            SwapChain::s_kRequiredDeviceExtensions);
+        VKP_ASSERT_MSG(swapChainSupported,
+                       "Physical device does not support swap chain creation!");
+
+        swapChainSupported = physDevice.RequestSwapChainSupport(*m_Surface);
+        VKP_ASSERT_MSG(swapChainSupported,
                        "Physical device does not support presentation!");
 
         m_Device->RetrievePresentQueueHandle();
+
+        return SwapChain::IsSurfaceSupported(physDevice, *m_Surface);
     }
 
     void Application::SetupSwapChain()
     {
-        const auto& physDevice = m_Device->GetPhysicalDevice();
+        /* TODO Application has only one device, for now
+        if (!m_Requirements.presentationSupport)
+        */
 
-        const bool IsSwapChainSupported =
-            SwapChain::IsSurfaceSupported(physDevice, *m_Surface);
-
+        const bool IsSwapChainSupported = MakeDeviceSupportPresentation();
         VKP_ASSERT_MSG(IsSwapChainSupported,
                        "No WSI support on physical device:");
-        physDevice.PrintLogTraceProperties();
 
         m_SwapChain = std::make_unique<SwapChain>(*m_Device, *m_Surface);
 

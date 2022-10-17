@@ -184,6 +184,19 @@ namespace vkp
         );
     }
 
+    bool PhysicalDevice::HasEnabledExtensions(
+        const std::vector<const char*>& reqExtensions) const
+    {
+        VKP_REGISTER_FUNCTION();
+        std::set<std::string> extensions(reqExtensions.begin(),
+                                         reqExtensions.end());
+
+        for (const auto& enabledExt : m_EnabledExtensions)
+            extensions.erase(enabledExt);
+
+        return extensions.empty();
+    }
+
     QFamilyIndex PhysicalDevice::FindQueueFamilyIndex(
         VkQueueFlagBits queueFlags) const
     {
