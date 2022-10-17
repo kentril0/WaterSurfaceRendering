@@ -6,6 +6,9 @@
 #include "pch.h"
 #include "WaterSurface.h"
 
+#include <imgui/imgui.h>
+
+#include "Gui.h"
 
 
 WaterSurface::WaterSurface(AppCmdLineArgs args)
@@ -24,6 +27,7 @@ WaterSurface::~WaterSurface()
 {
     VKP_REGISTER_FUNCTION();
 
+    gui::DestroyImGui();
 }
 
 void WaterSurface::Start()
@@ -41,7 +45,7 @@ void WaterSurface::Start()
 
 void WaterSurface::Update(vkp::Timestep dt)
 {
-    m_Gui->NewFrame();
+    gui::NewFrame();
     {
         if (!ImGui::Begin("Application Configuration"))
         {
@@ -71,7 +75,7 @@ void WaterSurface::Render(
             m_SwapChain->GetFramebuffer(frameIndex)
         );
 
-        m_Gui->Render(commandBuffer);
+        gui::Render(commandBuffer);
 
         vkCmdEndRenderPass(commandBuffer);
     }
@@ -106,24 +110,41 @@ void WaterSurface::SetupGUI()
 {
     VKP_REGISTER_FUNCTION();
 
-    m_Gui = std::make_unique<vkp::Gui>(*m_Instance, *m_Device, *m_SwapChain);
+    VkDescriptorPool descriptorPool;
+    {
+        const auto kPoolSizes = gui::GetImGuiDescriptorPoolSizes();
 
-    CreateImGuiContext();
-}
+        descriptorPool = m_Device->CreateDescriptorPool(
+            1000 * kPoolSizes.size(),
+            kPoolSizes,
+            VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+    }
 
-void WaterSurface::CreateImGuiContext()
-{
-    VKP_REGISTER_FUNCTION();
+    const auto& physDevice = m_Device->GetPhysicalDevice();
 
-    m_Gui->SetupContext(*m_Window, *m_RenderPass);
+    gui::InitImGui(
+        *m_Instance,
+        physDevice,
+        *m_Device,
+        physDevice.GetQueueFamilyIndices().Graphics(),
+        m_Device->GetQueue(vkp::QFamily::Graphics),
+        descriptorPool,
+        m_SwapChain->GetMinImageCount(),
+        m_SwapChain->GetImageCount(),
+        [](VkResult err){ 
+            VKP_ASSERT_RESULT(err);
+        },
+        *m_Window,
+        *m_RenderPass
+    );
 
     vkp::CommandBuffer& cmdBuffer = BeginOneTimeCommands();
 
-        m_Gui->UploadFonts(cmdBuffer.buffer);
+        gui::UploadFonts(cmdBuffer);
 
     EndOneTimeCommands(cmdBuffer);
 
-    m_Gui->DestroyFontUploadObjects();
+    gui::DestroyFontUploadObjects();
 }
 
 void WaterSurface::OnFrameBufferResize(int width, int height)
@@ -136,7 +157,7 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
     CreateDrawCommandPools();
     CreateDrawCommandBuffers();
 
-    m_Gui->Recreate();
+    gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
 }
 
 void WaterSurface::CreateRenderPass()

@@ -7,6 +7,7 @@
 #define WATER_SURFACE_RENDERING_WATER_SURFACE_H_
 
 #include "core/Application.h"
+#include "vulkan/RenderPass.h"
 
 
 class WaterSurface : public vkp::Application
@@ -47,7 +48,6 @@ private:
     std::unique_ptr<vkp::RenderPass> m_RenderPass;
 
     std::vector< std::unique_ptr<vkp::CommandPool> > m_DrawCmdPools{ };
-    std::unique_ptr<vkp::Gui> m_Gui{ nullptr };
 
     std::array<VkClearValue, 2> m_ClearValues{
         VkClearValue{ 0.118f, 0.235f, 0.314f, 1.0f }, // clear color
