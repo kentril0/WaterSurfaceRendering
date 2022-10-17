@@ -9,6 +9,8 @@
 #include <string>
 #include <memory>
 
+#include <vulkan/vulkan.h>
+
 #include "core/Assert.h"
 #include "core/Timestep.h"
 #include "core/Timer.h"
@@ -16,9 +18,7 @@
 #include "vulkan/Instance.h"
 #include "vulkan/Device.h"
 #include "vulkan/SwapChain.h"
-#include "vulkan/RenderPass.h"
 #include "vulkan/CommandPool.h"
-#include "Gui.h"
 
 
 namespace vkp
