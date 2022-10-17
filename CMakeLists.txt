@@ -7,9 +7,12 @@ cmake_minimum_required(VERSION 3.16)
 
 project(water VERSION 0.1 LANGUAGES CXX)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-
 
 # ------------------------------------------------------------------------------
 # Setup directories
