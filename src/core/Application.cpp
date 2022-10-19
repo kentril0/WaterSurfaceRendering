@@ -323,6 +323,29 @@ namespace vkp
         m_TransferCmdPool->FreeCommandBuffers();
     }
 
+    std::vector<
+        std::shared_ptr<ShaderModule>
+    > Application::CreateShadersFromShaderInfos(
+            const ShaderInfo* kShaderInfos,
+            const uint32_t kShaderInfoCount) const
+    {
+        VKP_ASSERT(m_Device != nullptr && *m_Device != VK_NULL_HANDLE);
+
+        std::vector<
+            std::shared_ptr<ShaderModule>
+        > shaders(kShaderInfoCount, nullptr);
+
+        for (uint32_t i = 0; i < kShaderInfoCount; ++i)
+        {
+            shaders[i] = std::make_shared<ShaderModule>(
+                *m_Device, kShaderInfos[i]
+            );
+        }
+
+        return shaders;
+    }
+
+
     // =============================================================================
     // External Controls
     // =============================================================================
