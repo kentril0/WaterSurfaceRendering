@@ -111,7 +111,7 @@ namespace vkp
 
             /** 
              * @return Unique pointer to the built DescriptorSetLayout from the
-             *  previsouly added layout bindings
+             *  previously added layout bindings
              */
             std::unique_ptr<DescriptorSetLayout> Build() const;
 
