@@ -120,6 +120,38 @@ add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR})
 # TODO run ./utils/git-sync-deps to pull SPIRV-Tools into third_party/
 # https://github.com/google/shaderc/issues/1162
 
+# ----------------------------------------------------------
+# FFTW
+# http://www.fftw.org/
+
+set(FFTW_DIR         "${LIBS_DIR}/fftw")
+set(FFTW_INCLUDE_DIR "${FFTW_DIR}/api")
+set(FFTW_BINARY_DIR  "${BUILD_DIR}/fftw")
+
+include(FetchContent)
+
+FetchContent_Populate(fftw
+
+    TMP_DIR "${BUILD_DIR}/temp"
+    DOWNLOAD_DIR "${BUILD_DIR}/download"
+    SOURCE_DIR "${FFTW_DIR}"
+
+    URL "http://fftw.org/fftw-3.3.10.tar.gz"
+    URL_MD5 "8ccbf6a5ea78a16dbc3e1306e234cc5c"
+)
+
+set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "" FORCE)
+set(BUILD_TESTS       OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_OPENMP     OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_THREADS    OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_FLOAT      ON  CACHE INTERNAL "" FORCE)
+set(ENABLE_SSE        OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_SSE2       OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_AVX        OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_AVX2       OFF CACHE INTERNAL "" FORCE)
+
+add_subdirectory(${FFTW_DIR} ${FFTW_BINARY_DIR})
+
 # ==============================================================================
 # Header-only
 #   Should be able to access them relative to variable LIBS_DIR
@@ -190,6 +222,7 @@ target_include_directories(${PROJECT_NAME}
             ${STB_INCLUDE_DIR}
             ${IMGUI_INCLUDE_DIR}
             ${SHADERC_INCLUDE_DIR}
+            ${FFTW_INCLUDE_DIR}
 )
 
 add_dependencies(${PROJECT_NAME}
@@ -204,6 +237,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE spdlog::spdlog
     PRIVATE imgui
     PRIVATE shaderc
+    PRIVATE fftw3f
 )
 
 target_precompile_headers(${PROJECT_NAME}
