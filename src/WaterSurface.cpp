@@ -63,6 +63,7 @@ void WaterSurface::SetupWaterSurfaceMeshRendering()
 void WaterSurface::SetupAssets()
 {
     SetupGUI();
+    CreateCamera();
     CreateWaterSurfaces();
 }
 
@@ -96,10 +97,14 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
     }
 
     gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
+
+    m_Camera->SetAspectRatio(width / static_cast<float>(height));
 }
 
 void WaterSurface::Update(vkp::Timestep dt)
 {
+    UpdateCamera(dt);
+
     UpdateWaterSurfaceMesh();
 
     gui::NewFrame();
@@ -338,6 +343,20 @@ void WaterSurface::CreateWSMeshPipeline()
 // -----------------------------------------------------------------------------
 // Assets
 
+void WaterSurface::CreateCamera()
+{
+    const VkExtent2D kSwapChainExtent = m_SwapChain->GetExtent();
+
+    m_Camera = std::make_unique<vkp::Camera>(
+        kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height)
+    );
+    m_Camera->SetPitch(-45.0f);
+    m_Camera->SetYaw(90.0f);
+    m_Camera->SetFov(1.5);
+    m_Camera->SetNear(0.1f);
+    m_Camera->SetFar(1000.f);
+}
+
 void WaterSurface::SetupGUI()
 {
     VKP_REGISTER_FUNCTION();
@@ -479,6 +498,20 @@ void WaterSurface::UpdateWSMeshDescriptorSet(const uint32_t frameIndex)
     descriptorWriter.UpdateSet(m_WSMeshDescriptorSets[frameIndex]);
 }
 
+void WaterSurface::UpdateCamera(vkp::Timestep dt)
+{
+    m_Camera->Update(dt);
+
+    //m_VertexUBO.model = glm::scale(glm::mat4(1.0f), glm::vec3(5.f, 5.f, 5.f));
+    m_VertexUBO.model = glm::mat4(1.0f);
+    m_VertexUBO.view = m_Camera->GetViewMat();
+    m_VertexUBO.proj = m_Camera->GetProjMat();
+
+    // Vulkan uses inverted Y coord in comparison to OpenGL (set by glm lib)
+    // -> flip the sign on the scaling factor of the Y axis
+    m_VertexUBO.proj[1][1] *= -1;
+}
+
 void WaterSurface::UpdateWaterSurfaceMesh()
 {
     m_WaterSurfaceUBO.heightAmp =
@@ -519,4 +552,24 @@ void WaterSurface::DestroyDrawCommandPools()
 {
     VKP_REGISTER_FUNCTION();
     m_DrawCmdPools.clear();
+}
+
+void WaterSurface::OnMouseMove(double xpos, double ypos)
+{
+    m_Camera->OnMouseMove(xpos, ypos);
+}
+
+void WaterSurface::OnMousePressed(int button, int action, int mods)
+{
+    m_Camera->OnMouseButton(button, action, mods);
+}
+
+void WaterSurface::OnKeyPressed(int key, int action, int mods)
+{
+    m_Camera->OnKeyPressed(key, action);
+}
+
+void WaterSurface::OnCursorEntered(int entered)
+{
+    m_Camera->OnCursorEntered(entered);
 }
