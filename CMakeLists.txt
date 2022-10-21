@@ -205,6 +205,7 @@ set(MAIN_SOURCES
     "${MAIN_CORE_DIR}/Window.cpp"
     "${MAIN_DIR}/Gui.cpp"
     "${MAIN_CORE_DIR}/Application.cpp"
+    "${MAIN_SCENE_DIR}/Camera.cpp"
     "${MAIN_SCENE_DIR}/WaterSurfaceMesh.cpp"
     "${MAIN_SCENE_DIR}/WSTessendorf.cpp"
     "${MAIN_DIR}/WaterSurface.cpp"

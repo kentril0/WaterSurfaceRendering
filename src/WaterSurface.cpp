@@ -63,6 +63,7 @@ void WaterSurface::SetupWaterSurfaceMeshRendering()
 void WaterSurface::SetupAssets()
 {
     SetupGUI();
+    CreateCamera();
     CreateWaterSurfaces();
 }
 
@@ -96,23 +97,15 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
     }
 
     gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
+
+    m_Camera->SetAspectRatio(width / static_cast<float>(height));
 }
 
 void WaterSurface::Update(vkp::Timestep dt)
 {
+    UpdateCamera(dt);
     UpdateWaterSurfaceMesh();
-
-    gui::NewFrame();
-    {
-        if (!ImGui::Begin("Application Configuration"))
-        {
-            ImGui::End();
-            return;
-        }
-
-        ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
-        ImGui::End();
-    }
+    UpdateGui();
 }
 
 void WaterSurface::Render(
@@ -338,6 +331,20 @@ void WaterSurface::CreateWSMeshPipeline()
 // -----------------------------------------------------------------------------
 // Assets
 
+void WaterSurface::CreateCamera()
+{
+    const VkExtent2D kSwapChainExtent = m_SwapChain->GetExtent();
+
+    m_Camera = std::make_unique<vkp::Camera>(
+        kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height)
+    );
+    m_Camera->SetPitch(-45.0f);
+    m_Camera->SetYaw(90.0f);
+    m_Camera->SetFov(1.5);
+    m_Camera->SetNear(0.1f);
+    m_Camera->SetFar(1000.f);
+}
+
 void WaterSurface::SetupGUI()
 {
     VKP_REGISTER_FUNCTION();
@@ -479,6 +486,20 @@ void WaterSurface::UpdateWSMeshDescriptorSet(const uint32_t frameIndex)
     descriptorWriter.UpdateSet(m_WSMeshDescriptorSets[frameIndex]);
 }
 
+void WaterSurface::UpdateCamera(vkp::Timestep dt)
+{
+    m_Camera->Update(dt);
+
+    //m_VertexUBO.model = glm::scale(glm::mat4(1.0f), glm::vec3(5.f, 5.f, 5.f));
+    m_VertexUBO.model = glm::mat4(1.0f);
+    m_VertexUBO.view = m_Camera->GetViewMat();
+    m_VertexUBO.proj = m_Camera->GetProjMat();
+
+    // Vulkan uses inverted Y coord in comparison to OpenGL (set by glm lib)
+    // -> flip the sign on the scaling factor of the Y axis
+    m_VertexUBO.proj[1][1] *= -1;
+}
+
 void WaterSurface::UpdateWaterSurfaceMesh()
 {
     m_WaterSurfaceUBO.heightAmp =
@@ -519,4 +540,104 @@ void WaterSurface::DestroyDrawCommandPools()
 {
     VKP_REGISTER_FUNCTION();
     m_DrawCmdPools.clear();
+}
+
+// =============================================================================
+// Callbacks
+
+void WaterSurface::OnMouseMove(double xpos, double ypos)
+{
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseMove(xpos, ypos);
+    }
+}
+
+void WaterSurface::OnMousePressed(int button, int action, int mods)
+{
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseButton(button, action, mods);
+    }
+}
+
+void WaterSurface::OnKeyPressed(int key, int action, int mods)
+{
+    m_Camera->OnKeyPressed(key, action);
+
+    if (action == GLFW_RELEASE)
+    {
+        if (key == KeyHideGui)
+        {
+            m_State = m_State == States::GuiControls ? States::CameraControls
+                                                     : States::GuiControls;
+            m_Window->ShowCursor(m_State == States::GuiControls);
+        }
+    }
+}
+
+void WaterSurface::OnCursorEntered(int entered)
+{
+    m_Camera->OnCursorEntered(entered);
+}
+
+// =============================================================================
+// Gui functions
+
+void WaterSurface::UpdateGui()
+{
+    gui::NewFrame();
+
+    if (m_State != States::GuiControls)
+        return;
+
+    if (!ImGui::Begin("Application Configuration"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
+
+    ShowCameraSettings();
+
+    ImGui::End();
+}
+
+void WaterSurface::ShowCameraSettings()
+{
+    if (ImGui::CollapsingHeader("Camera Settings"))
+    {
+        // Must be automatic variables, camera is controlled also using user input
+        glm::vec3 pos = m_Camera->GetPosition();
+        glm::vec3 front = m_Camera->GetFront();
+        float pitch = m_Camera->GetPitch();
+        float yaw = m_Camera->GetYaw();
+        float fov = m_Camera->GetFov();
+        float camNear = m_Camera->GetNear();
+        float camFar = m_Camera->GetFar();
+
+        if (ImGui::DragFloat3("Position", glm::value_ptr(pos), 0.1f))
+            m_Camera->SetPosition(pos);
+
+        ImGui::InputFloat3("Front", glm::value_ptr(front), "%.3f",
+                           ImGuiInputTextFlags_ReadOnly);
+
+        if (ImGui::SliderFloat("Pitch angle", &pitch, -89.f, 89.f, "%.0f deg"))
+            m_Camera->SetPitch(pitch);
+
+        if (ImGui::SliderFloat("Yaw angle", &yaw, 0.f, 360.f, "%.0f deg"))
+            m_Camera->SetYaw(yaw);
+
+        if (ImGui::SliderAngle("Field of view", &fov, 0.f, 120.f))
+            m_Camera->SetFov(fov);
+
+        if (ImGui::SliderFloat("Near plane", &camNear, 0.f, 10.f))
+            m_Camera->SetNear(camNear);
+
+        if (ImGui::SliderFloat("Far plane", &camFar, 1000.f, 10000.f))
+            m_Camera->SetFar(camFar);
+
+        ImGui::NewLine();
+    }
 }

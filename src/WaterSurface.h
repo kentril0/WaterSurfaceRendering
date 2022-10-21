@@ -15,6 +15,7 @@
 
 #include "scene/WSTessendorf.h"
 #include "scene/WaterSurfaceMesh.h"
+#include "scene/Camera.h"
 
 
 class WaterSurface : public vkp::Application
@@ -38,6 +39,10 @@ protected:
         std::vector<VkCommandBuffer>& buffersToSubmit) override;
 
     void OnFrameBufferResize(int width, int height) override;
+    void OnMouseMove(double xpos, double ypos) override;
+    void OnMousePressed(int button, int action, int mods) override;
+    void OnKeyPressed(int key, int action, int mods) override;
+    void OnCursorEntered(int entered) override;
 
 private:
     void CreateRenderPass();
@@ -64,8 +69,10 @@ private:
 
     void SetupAssets();
         void SetupGUI();
+        void CreateCamera();
         void CreateWaterSurfaces();
 
+    void UpdateCamera(vkp::Timestep dt);
     void UpdateWaterSurfaceMesh();
     void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
                                 const uint32_t frameIndex);
@@ -73,6 +80,11 @@ private:
     // On properties change:
 
     void PrepareWaterSurfaceMesh(uint32_t size, float scale);
+
+    // GUI:
+
+    void UpdateGui();
+    void ShowCameraSettings();
 
 private:
     std::unique_ptr<vkp::RenderPass> m_RenderPass;  // TODO maybe into app
@@ -96,7 +108,26 @@ private:
     std::vector<vkp::Buffer> m_UniformBuffers;
 
     // =========================================================================
+
+    /// @brief Application states
+    enum class States
+    {
+        GuiControls = 0,    ///< Gui is shown and captures mouse controls
+        CameraControls,     ///< Gui is hidden and camera captures mouse controls
+
+        TotalStates
+    };
+
+    States m_State{ States::GuiControls };  ///< Current application state
+
+    enum Controls
+    {
+        KeyHideGui = GLFW_KEY_ESCAPE,
+    };
+
     // Assets
+
+    std::unique_ptr<vkp::Camera> m_Camera;
 
     // -------------------------------------------------------------------------
     // Water Surfaces
@@ -113,11 +144,7 @@ private:
         float heightAmp{ 1.0 };  ///< Water surface height amplitude
     };
 
-    VertexUBO m_VertexUBO{
-        .model = glm::mat4(1.0f),
-        .view = glm::mat4(1.0f),
-        .proj = glm::mat4(1.0f)
-    };
+    VertexUBO m_VertexUBO{};
     WaterSurfaceUBO m_WaterSurfaceUBO{};
 
     std::unique_ptr<vkp::DescriptorSetLayout> m_WSMeshDescriptorSetLayout;
