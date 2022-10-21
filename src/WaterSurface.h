@@ -77,11 +77,14 @@ private:
     void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
                                 const uint32_t frameIndex);
 
-    void UpdateGui();
-
     // On properties change:
 
     void PrepareWaterSurfaceMesh(uint32_t size, float scale);
+
+    // GUI:
+
+    void UpdateGui();
+    void ShowCameraSettings();
 
 private:
     std::unique_ptr<vkp::RenderPass> m_RenderPass;  // TODO maybe into app

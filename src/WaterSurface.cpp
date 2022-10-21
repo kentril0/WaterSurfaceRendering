@@ -591,7 +591,6 @@ void WaterSurface::UpdateGui()
     if (m_State != States::GuiControls)
         return;
 
-    
     if (!ImGui::Begin("Application Configuration"))
     {
         ImGui::End();
@@ -599,5 +598,46 @@ void WaterSurface::UpdateGui()
     }
 
     ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
+
+    ShowCameraSettings();
+
     ImGui::End();
+}
+
+void WaterSurface::ShowCameraSettings()
+{
+    if (ImGui::CollapsingHeader("Camera Settings"))
+    {
+        // Must be automatic variables, camera is controlled also using user input
+        glm::vec3 pos = m_Camera->GetPosition();
+        glm::vec3 front = m_Camera->GetFront();
+        float pitch = m_Camera->GetPitch();
+        float yaw = m_Camera->GetYaw();
+        float fov = m_Camera->GetFov();
+        float camNear = m_Camera->GetNear();
+        float camFar = m_Camera->GetFar();
+
+        if (ImGui::DragFloat3("Position", glm::value_ptr(pos), 0.1f))
+            m_Camera->SetPosition(pos);
+
+        ImGui::InputFloat3("Front", glm::value_ptr(front), "%.3f",
+                           ImGuiInputTextFlags_ReadOnly);
+
+        if (ImGui::SliderFloat("Pitch angle", &pitch, -89.f, 89.f, "%.0f deg"))
+            m_Camera->SetPitch(pitch);
+
+        if (ImGui::SliderFloat("Yaw angle", &yaw, 0.f, 360.f, "%.0f deg"))
+            m_Camera->SetYaw(yaw);
+
+        if (ImGui::SliderAngle("Field of view", &fov, 0.f, 120.f))
+            m_Camera->SetFov(fov);
+
+        if (ImGui::SliderFloat("Near plane", &camNear, 0.f, 10.f))
+            m_Camera->SetNear(camNear);
+
+        if (ImGui::SliderFloat("Far plane", &camFar, 1000.f, 10000.f))
+            m_Camera->SetFar(camFar);
+
+        ImGui::NewLine();
+    }
 }
