@@ -37,14 +37,71 @@ void WaterSurface::Start()
     CreateRenderPass();
     m_SwapChain->CreateFramebuffers(*m_RenderPass);
 
-    CreateDrawCommandPools();
+    const uint32_t kImageCount = m_SwapChain->GetImageCount();
+
+    CreateDrawCommandPools(kImageCount);
     CreateDrawCommandBuffers();
 
+    CreateUniformBuffers(kImageCount);
+    CreateDescriptorPool();
+
+    SetupWaterSurfaceMeshRendering();
+
+    SetupAssets();
+}
+
+void WaterSurface::SetupWaterSurfaceMeshRendering()
+{
+    CreateWSMeshDescriptorSetLayout();
+    SetupWSMeshPipeline();
+    CreateWSMeshPipeline();
+
+    CreateWSMeshDescriptorSets(m_SwapChain->GetImageCount());
+    UpdateWSMeshDescriptorSets();
+}
+
+void WaterSurface::SetupAssets()
+{
     SetupGUI();
+    CreateWaterSurfaces();
+}
+
+void WaterSurface::OnFrameBufferResize(int width, int height)
+{
+    m_RenderPass->Destroy();
+    CreateRenderPass();
+    m_SwapChain->CreateFramebuffers(*m_RenderPass);
+
+    CreateWSMeshPipeline();
+
+    // Also destroyes all the draw command buffers
+    DestroyDrawCommandPools();
+
+    const uint32_t kImageCount = m_SwapChain->GetImageCount();
+
+    CreateDrawCommandPools(kImageCount);
+    CreateDrawCommandBuffers();
+
+    const bool kImageCountChanged = m_DrawCmdPools.size() != kImageCount;
+    if (kImageCountChanged)
+    {
+        VKP_LOG_WARN("Image Count Changed!");
+
+        m_UniformBuffers.clear();
+        CreateUniformBuffers(kImageCount);
+
+        m_WSMeshDescriptorSets.clear();
+        CreateWSMeshDescriptorSets(kImageCount);
+        UpdateWSMeshDescriptorSets();
+    }
+
+    gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
 }
 
 void WaterSurface::Update(vkp::Timestep dt)
 {
+    UpdateWaterSurfaceMesh();
+
     gui::NewFrame();
     {
         if (!ImGui::Begin("Application Configuration"))
@@ -64,6 +121,8 @@ void WaterSurface::Render(
     std::vector<VkPipelineStageFlags>& stagesToWait,
     std::vector<VkCommandBuffer>& buffersToSubmit)
 {
+    UpdateUniformBuffer(frameIndex);
+
     auto& drawCmdPool = m_DrawCmdPools[frameIndex];
     drawCmdPool->Reset();
     
@@ -75,6 +134,8 @@ void WaterSurface::Render(
             m_SwapChain->GetFramebuffer(frameIndex)
         );
 
+        RenderWaterSurfaceMesh(commandBuffer, frameIndex);
+
         gui::Render(commandBuffer);
 
         vkCmdEndRenderPass(commandBuffer);
@@ -85,26 +146,197 @@ void WaterSurface::Render(
     buffersToSubmit.push_back(commandBuffer);
 }
 
-void WaterSurface::BeginRenderPass(
-    VkCommandBuffer commandBuffer,
-    VkFramebuffer framebuffer)
+void WaterSurface::RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
+                                          const uint32_t frameIndex)
 {
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = *m_RenderPass;
-    renderPassInfo.framebuffer = framebuffer;
+    vkCmdBindPipeline(
+        cmdBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        *m_WSMeshPipeline
+    );
 
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+    const uint32_t kFirstSet = 0, kDescriptorSetCount = 1;
+    const uint32_t kDynamicOffsetCount = 0;
+    const uint32_t* kDynamicOffsets = nullptr;
 
-    renderPassInfo.clearValueCount = 
-        static_cast<uint32_t>(m_ClearValues.size());
-    renderPassInfo.pClearValues = m_ClearValues.data();
+    vkCmdBindDescriptorSets(
+        cmdBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        *m_WSMeshPipeline,
+        kFirstSet,
+        kDescriptorSetCount,
+        &m_WSMeshDescriptorSets[frameIndex],
+        kDynamicOffsetCount,
+        kDynamicOffsets
+    );
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, 
-                         VK_SUBPASS_CONTENTS_INLINE);
+    m_WSMesh->Render(cmdBuffer);
 }
 
+// =============================================================================
+// Create functions
+
+void WaterSurface::CreateRenderPass()
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_RenderPass.reset(
+        new vkp::RenderPass(
+            *m_Device,
+            m_SwapChain->GetImageFormat(),
+            m_SwapChain->GetDepthAttachmentFormat())
+    );
+
+    m_RenderPass->Create(m_SwapChain->HasDepthAttachment());
+}
+
+void WaterSurface::CreateDrawCommandPools(const uint32_t kCount)
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_DrawCmdPools.resize(kCount);
+
+    for (auto& pool : m_DrawCmdPools)
+    {
+        pool.reset( new vkp::CommandPool(
+            *m_Device,
+            vkp::QFamily::Graphics,
+            VK_COMMAND_POOL_CREATE_TRANSIENT_BIT)    // short-lived
+        );
+    }
+}
+
+void WaterSurface::CreateDrawCommandBuffers()
+{
+    VKP_REGISTER_FUNCTION();
+    const uint32_t kBuffersPerFrame = 1;
+
+    for (auto& commandPool : m_DrawCmdPools)
+    {
+        commandPool->AllocateCommandBuffers(kBuffersPerFrame);
+    }
+}
+
+void WaterSurface::CreateUniformBuffers(const uint32_t kBufferCount)
+{
+    VKP_REGISTER_FUNCTION();
+
+    const VkDeviceSize kBufferSize = 
+        m_Device->GetUniformBufferAlignment(sizeof(VertexUBO)) +
+        m_Device->GetUniformBufferAlignment(sizeof(WaterSurfaceUBO));
+
+    m_UniformBuffers.reserve(kBufferCount);
+
+    for (uint32_t i = 0; i < kBufferCount; ++i)
+    {
+        m_UniformBuffers.emplace_back(*m_Device);
+
+        m_UniformBuffers[i].Create(kBufferSize,
+                                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+        VKP_ASSERT_RESULT(m_UniformBuffers[i].Map());
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Descriptors 
+
+void WaterSurface::CreateDescriptorPool()
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_DescriptorPool = vkp::DescriptorPool::Builder(*m_Device)
+        .AddPoolSize(
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            m_SwapChain->GetImageCount() * 2
+        )
+        .Build(m_SwapChain->GetImageCount());
+}
+
+void WaterSurface::CreateWSMeshDescriptorSetLayout()
+{
+    VKP_REGISTER_FUNCTION();
+
+    uint32_t bindingPoint = 0;
+
+    m_WSMeshDescriptorSetLayout = vkp::DescriptorSetLayout::Builder(*m_Device)
+        .AddBinding({
+            .binding = bindingPoint++,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+        })
+        .AddBinding({
+            .binding = bindingPoint++,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+        })
+        .Build();
+}
+
+void WaterSurface::CreateWSMeshDescriptorSets(const uint32_t kCount)
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_WSMeshDescriptorSets.resize(kCount, VK_NULL_HANDLE);
+
+    VkResult err;
+    for (auto& set : m_WSMeshDescriptorSets)
+    {
+        err = m_DescriptorPool->AllocateDescriptorSet(
+            *m_WSMeshDescriptorSetLayout,
+            set
+        );
+        VKP_ASSERT_RESULT(err);
+    }
+}
+
+void WaterSurface::SetupWSMeshPipeline()
+{
+    VKP_REGISTER_FUNCTION();
+
+    std::vector<
+        std::shared_ptr<vkp::ShaderModule>
+    > shaders = CreateShadersFromShaderInfos(s_kWSMeshShaderInfos.data(),
+                                             s_kWSMeshShaderInfos.size());
+
+    m_WSMeshPipeline = std::make_unique<vkp::Pipeline>(
+        *m_Device, shaders 
+    );
+
+    VKP_ASSERT(m_WSMeshDescriptorSetLayout != nullptr);
+        VKP_ASSERT(m_WSMeshDescriptorSetLayout->GetLayout() != VK_NULL_HANDLE);
+
+    auto& pipelineLayoutInfo = m_WSMeshPipeline->GetPipelineLayoutInfo();
+    pipelineLayoutInfo.setLayoutCount = 1;
+    const auto& descriptorSetLayout = m_WSMeshDescriptorSetLayout->GetLayout();
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+
+    VKP_LOG_INFO( "VertexSize: {}", sizeof(WaterSurfaceMesh::Vertex) );
+
+    const auto& kAttribDescs = WaterSurfaceMesh::Vertex::s_AttribDescriptions;
+    m_WSMeshPipeline->SetVertexInputState(
+        vkp::Pipeline::InitVertexInput(
+            WaterSurfaceMesh::Vertex::s_BindingDescriptions,
+            WaterSurfaceMesh::Vertex::s_AttribDescriptions
+        )
+    );
+}
+
+void WaterSurface::CreateWSMeshPipeline()
+{
+    VKP_REGISTER_FUNCTION();
+    VKP_ASSERT(m_WSMeshPipeline != nullptr);
+
+    m_Device->QueueWaitIdle(vkp::QFamily::Graphics);
+
+    m_WSMeshPipeline->Create(m_SwapChain->GetExtent(),
+                             *m_RenderPass,
+                             m_SwapChain->HasDepthAttachment());
+}
+
+// -----------------------------------------------------------------------------
+// Assets
 
 void WaterSurface::SetupGUI()
 {
@@ -147,69 +379,144 @@ void WaterSurface::SetupGUI()
     gui::DestroyFontUploadObjects();
 }
 
-void WaterSurface::OnFrameBufferResize(int width, int height)
-{
-    m_RenderPass->Destroy();
-    DestroyDrawCommandPools();
-
-    CreateRenderPass();
-    m_SwapChain->CreateFramebuffers(*m_RenderPass);
-    CreateDrawCommandPools();
-    CreateDrawCommandBuffers();
-
-    gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
-}
-
-void WaterSurface::CreateRenderPass()
+void WaterSurface::CreateWaterSurfaces()
 {
     VKP_REGISTER_FUNCTION();
 
-    m_RenderPass.reset(
-        new vkp::RenderPass(
-            *m_Device,
-            m_SwapChain->GetImageFormat(),
-            m_SwapChain->GetDepthAttachmentFormat())
+    m_WSMesh.reset( new WaterSurfaceMesh(*m_Device) );
+
+    m_WSTess.reset( new WSTessendorf() );
+
+    PrepareWaterSurfaceMesh(m_WSTess->GetTileSize(), m_WSTess->GetTileLength());
+}
+
+void WaterSurface::PrepareWaterSurfaceMesh(uint32_t size, float scale)
+{
+    VKP_REGISTER_FUNCTION();
+
+    // TODO batch cmdBuffers
+    // TODO host fence instead
+    vkp::CommandBuffer& cmdBuffer = BeginOneTimeCommands();
+
+        vkp::Buffer stagingBuffer(*m_Device);
+        m_WSMesh->Prepare(size, scale, stagingBuffer, cmdBuffer);
+
+    EndOneTimeCommands(cmdBuffer);
+}
+
+// =============================================================================
+// Update functions
+
+void WaterSurface::BeginRenderPass(
+    VkCommandBuffer commandBuffer,
+    VkFramebuffer framebuffer)
+{
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = *m_RenderPass;
+    renderPassInfo.framebuffer = framebuffer;
+
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+
+    renderPassInfo.clearValueCount = 
+        static_cast<uint32_t>(m_ClearValues.size());
+    renderPassInfo.pClearValues = m_ClearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, 
+                         VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void WaterSurface::UpdateUniformBuffer(const uint32_t imageIndex)
+{
+    auto& buffer = m_UniformBuffers[imageIndex];
+
+    void* dataAddr = buffer.GetMappedAddress();
+
+    buffer.CopyToMapped(&m_VertexUBO, sizeof(m_VertexUBO));
+    buffer.CopyToMapped(&m_WaterSurfaceUBO, sizeof(m_WaterSurfaceUBO),
+        static_cast<void*>(
+            static_cast<uint8_t*>(dataAddr) + 
+            m_Device->GetUniformBufferAlignment(sizeof(VertexUBO))
+        )
     );
 
-    m_RenderPass->Create(m_SwapChain->HasDepthAttachment());
+    buffer.FlushMappedRange();
 }
 
-void WaterSurface::CreateDrawCommandPools()
+void WaterSurface::UpdateWSMeshDescriptorSets()
 {
-    VKP_REGISTER_FUNCTION();
-    // A command pool for each frame that is going to reset its buffers 
-    //  every time
-    // TODO maybe on recreate
-    const uint32_t kImageCount = m_SwapChain->GetImageCount();
+    VKP_ASSERT(m_WSMeshDescriptorSets.size() == m_UniformBuffers.size());
 
-    m_DrawCmdPools.reserve(kImageCount);
-
-    for (uint32_t i = 0; i < kImageCount; ++i)
+    for (uint32_t i = 0; i < m_WSMeshDescriptorSets.size(); ++i)
     {
-        m_DrawCmdPools.emplace_back(
-            std::make_unique<vkp::CommandPool>(
-                *m_Device,
-                vkp::QFamily::Graphics,
-                VK_COMMAND_POOL_CREATE_TRANSIENT_BIT    // short-lived
-            )
-        );
+        UpdateWSMeshDescriptorSet(i);
     }
 }
 
-void WaterSurface::CreateDrawCommandBuffers()
+void WaterSurface::UpdateWSMeshDescriptorSet(const uint32_t frameIndex)
 {
     VKP_REGISTER_FUNCTION();
-    const uint32_t kBuffersPerFrame = 1;
+    VKP_ASSERT(frameIndex < m_WSMeshDescriptorSets.size());
 
-    for (auto& commandPool : m_DrawCmdPools)
-    {
-        commandPool->AllocateCommandBuffers(kBuffersPerFrame);
-    }
+    vkp::DescriptorWriter descriptorWriter(*m_WSMeshDescriptorSetLayout,
+                                           *m_DescriptorPool);
+
+    VkDescriptorBufferInfo bufferInfos[2] = {};
+    bufferInfos[0].buffer = m_UniformBuffers[frameIndex];
+    bufferInfos[0].offset = 0;
+    bufferInfos[0].range = sizeof(VertexUBO);
+
+    bufferInfos[1].buffer = m_UniformBuffers[frameIndex];
+    bufferInfos[1].offset = 
+        m_Device->GetUniformBufferAlignment(sizeof(VertexUBO));
+    bufferInfos[1].range = sizeof(WaterSurfaceUBO);
+
+    descriptorWriter
+        .AddBufferDescriptor(0, &bufferInfos[0])
+        .AddBufferDescriptor(1, &bufferInfos[1]);
+
+    descriptorWriter.UpdateSet(m_WSMeshDescriptorSets[frameIndex]);
 }
+
+void WaterSurface::UpdateWaterSurfaceMesh()
+{
+    m_WaterSurfaceUBO.heightAmp =
+        m_WSTess->ComputeWaves(m_LastFrameTime);
+
+    const auto& displacements = m_WSTess->GetDisplacements();
+    const auto& normals = m_WSTess->GetNormals();
+
+    auto& vertices = m_WSMesh->GetVertices();
+    static std::vector<glm::vec4> orgPositions;
+    static bool once = true;
+    if (once)
+    {
+        orgPositions.reserve(vertices.size());
+        std::transform(vertices.begin(), vertices.end(),
+                       std::back_inserter(orgPositions),
+                       [](const WaterSurfaceMesh::Vertex& v) { return v.pos; });
+        once = false;
+    }
+
+    // TODO benchmark loop
+    VKP_ASSERT(vertices.size() == displacements.size() &&
+               vertices.size() == normals.size());
+    for (uint32_t i = 0; i < vertices.size(); ++i)
+    {
+        vertices[i].pos.y = orgPositions[i].y +
+                          m_WaterSurfaceUBO.heightAmp * displacements[i].y;
+        vertices[i].normal = normals[i];
+    }
+
+    m_WSMesh->UpdateVertexBuffer();
+}
+
+// =============================================================================
+// Destroy functions
 
 void WaterSurface::DestroyDrawCommandPools()
 {
     VKP_REGISTER_FUNCTION();
     m_DrawCmdPools.clear();
 }
-
