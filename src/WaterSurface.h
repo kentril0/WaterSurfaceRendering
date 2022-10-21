@@ -77,6 +77,8 @@ private:
     void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
                                 const uint32_t frameIndex);
 
+    void UpdateGui();
+
     // On properties change:
 
     void PrepareWaterSurfaceMesh(uint32_t size, float scale);
@@ -103,6 +105,23 @@ private:
     std::vector<vkp::Buffer> m_UniformBuffers;
 
     // =========================================================================
+
+    /// @brief Application states
+    enum class States
+    {
+        GuiControls = 0,    ///< Gui is shown and captures mouse controls
+        CameraControls,     ///< Gui is hidden and camera captures mouse controls
+
+        TotalStates
+    };
+
+    States m_State{ States::GuiControls };  ///< Current application state
+
+    enum Controls
+    {
+        KeyHideGui = GLFW_KEY_ESCAPE,
+    };
+
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera;

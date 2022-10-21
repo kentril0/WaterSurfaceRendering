@@ -104,20 +104,8 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
 void WaterSurface::Update(vkp::Timestep dt)
 {
     UpdateCamera(dt);
-
     UpdateWaterSurfaceMesh();
-
-    gui::NewFrame();
-    {
-        if (!ImGui::Begin("Application Configuration"))
-        {
-            ImGui::End();
-            return;
-        }
-
-        ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
-        ImGui::End();
-    }
+    UpdateGui();
 }
 
 void WaterSurface::Render(
@@ -554,22 +542,62 @@ void WaterSurface::DestroyDrawCommandPools()
     m_DrawCmdPools.clear();
 }
 
+// =============================================================================
+// Callbacks
+
 void WaterSurface::OnMouseMove(double xpos, double ypos)
 {
-    m_Camera->OnMouseMove(xpos, ypos);
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseMove(xpos, ypos);
+    }
 }
 
 void WaterSurface::OnMousePressed(int button, int action, int mods)
 {
-    m_Camera->OnMouseButton(button, action, mods);
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseButton(button, action, mods);
+    }
 }
 
 void WaterSurface::OnKeyPressed(int key, int action, int mods)
 {
     m_Camera->OnKeyPressed(key, action);
+
+    if (action == GLFW_RELEASE)
+    {
+        if (key == KeyHideGui)
+        {
+            m_State = m_State == States::GuiControls ? States::CameraControls
+                                                     : States::GuiControls;
+            m_Window->ShowCursor(m_State == States::GuiControls);
+        }
+    }
 }
 
 void WaterSurface::OnCursorEntered(int entered)
 {
     m_Camera->OnCursorEntered(entered);
+}
+
+// =============================================================================
+// Gui functions
+
+void WaterSurface::UpdateGui()
+{
+    gui::NewFrame();
+
+    if (m_State != States::GuiControls)
+        return;
+
+    
+    if (!ImGui::Begin("Application Configuration"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
+    ImGui::End();
 }
