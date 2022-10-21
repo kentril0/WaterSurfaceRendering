@@ -19,6 +19,7 @@
 #include "vulkan/Device.h"
 #include "vulkan/SwapChain.h"
 #include "vulkan/CommandPool.h"
+#include "vulkan/ShaderModule.h"
 
 
 namespace vkp
@@ -74,7 +75,7 @@ namespace vkp
         virtual void OnFrameBufferResize(int width, int height) {}
 
     protected:
-        // -------------------------------------------------------------------------
+        // ---------------------------------------------------------------------
         // Utility functions 
 
         /**
@@ -104,6 +105,11 @@ namespace vkp
         * @param cmdBuffer Command buffer in recording state
         */
         void EndOneTimeCommands(CommandBuffer& cmdBuffer);
+
+        std::vector<
+            std::shared_ptr<ShaderModule>
+        > CreateShadersFromShaderInfos(const ShaderInfo* kShaderInfos,
+                                       const uint32_t kShaderInfoCount) const;
 
     protected:
         std::string m_Name;

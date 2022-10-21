@@ -17,6 +17,7 @@ TODO: to be implemented
 * C++17
 * CMake
 * Vulkan SDK
+
 ### Libraries
 * window abstraction: [GLFW3](https://github.com/glfw/glfw)
 * logging library: [SPDLOG](https://github.com/gabime/spdlog)
@@ -24,7 +25,7 @@ TODO: to be implemented
 * gui library: [ImGui](https://github.com/ocornut/imgui/)
 * image loading library: [STB](https://github.com/nothings/stb)
 * shader tools (e.g. compilation): [Shaderc](https://github.com/google/shaderc)
-
+* discrete Fourier transform (DFT): [FFTW](http://fftw.org/) version 3.3.10
 
 ## How to compile
 Tested on Ubuntu 20.04 LTS, in root dir:
@@ -38,4 +39,5 @@ $ ./water
 ## License
 
 MIT license
+
 

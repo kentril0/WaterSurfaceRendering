@@ -9,7 +9,7 @@
 
 namespace vkp
 {
-    Buffer::Buffer(Device& device)
+    Buffer::Buffer(const Device& device)
         : m_Device(device)
     {
         VKP_REGISTER_FUNCTION();
