@@ -96,7 +96,7 @@ private:
     };
 
     // TODO maybe into app
-    std::vector< std::unique_ptr<vkp::CommandPool> > m_DrawCmdPools;
+    std::vector<vkp::CommandPool> m_DrawCmdPools;
 
     // -------------------------------------------------------------------------
     // Resource Descriptors
@@ -152,7 +152,6 @@ private:
 
     std::unique_ptr<WSTessendorf> m_WSTess;
     std::unique_ptr<WaterSurfaceMesh> m_WSMesh;
-
 
     // -------------------------------------------------------------------------
     // Rendering water surface as a mesh

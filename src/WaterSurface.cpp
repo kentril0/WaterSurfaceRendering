@@ -117,9 +117,9 @@ void WaterSurface::Render(
     UpdateUniformBuffer(frameIndex);
 
     auto& drawCmdPool = m_DrawCmdPools[frameIndex];
-    drawCmdPool->Reset();
+    drawCmdPool.Reset();
     
-    vkp::CommandBuffer& commandBuffer = drawCmdPool->Front();
+    vkp::CommandBuffer& commandBuffer = drawCmdPool.Front();
     commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
         BeginRenderPass(
@@ -187,14 +187,14 @@ void WaterSurface::CreateDrawCommandPools(const uint32_t kCount)
 {
     VKP_REGISTER_FUNCTION();
 
-    m_DrawCmdPools.resize(kCount);
+    m_DrawCmdPools.reserve(kCount);
 
-    for (auto& pool : m_DrawCmdPools)
+    for (uint32_t i = 0; i < kCount; ++i)
     {
-        pool.reset( new vkp::CommandPool(
+        m_DrawCmdPools.emplace_back(
             *m_Device,
             vkp::QFamily::Graphics,
-            VK_COMMAND_POOL_CREATE_TRANSIENT_BIT)    // short-lived
+            VK_COMMAND_POOL_CREATE_TRANSIENT_BIT    // short-lived
         );
     }
 }
@@ -204,9 +204,9 @@ void WaterSurface::CreateDrawCommandBuffers()
     VKP_REGISTER_FUNCTION();
     const uint32_t kBuffersPerFrame = 1;
 
-    for (auto& commandPool : m_DrawCmdPools)
+    for (auto& pool : m_DrawCmdPools)
     {
-        commandPool->AllocateCommandBuffers(kBuffersPerFrame);
+        pool.AllocateCommandBuffers(kBuffersPerFrame);
     }
 }
 
