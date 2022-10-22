@@ -6,6 +6,10 @@
 #include "pch.h"
 #include "vulkan/Texture2D.h"
 
+// Compilation issue: some compilers might have issue compiling with SIMD
+//  https://github.com/nothings/stb/issues/1258
+//  can be safely turned off, there is no continuous loading after initialization
+#define STBI_NO_SIMD
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
