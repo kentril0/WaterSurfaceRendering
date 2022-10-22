@@ -174,7 +174,7 @@ private:
     float     m_WindDirLen { 1.0f };
 
     // Base wave height field generated from the spectrum
-    std::vector<BaseWave> m_BaseWaves{};
+    std::vector<BaseWave> m_BaseWaves;
 
     // Precomputed values of dispersion relation
     float m_BaseFreq{ 1.0f };
@@ -187,11 +187,11 @@ private:
     // ---------------------------------------------------------------------
     // FT computation using FFTW
 
-    std::vector<Complex> m_h_FT{};          ///< FT wave height
-    std::vector<Complex> m_h_FT_slopeX{};
-    std::vector<Complex> m_h_FT_slopeZ{};
+    Complex* m_h_FT{ nullptr };          ///< FT wave height
+    Complex* m_h_FT_slopeX{ nullptr };
+    Complex* m_h_FT_slopeZ{ nullptr };
 #ifdef CHOPPY_WAVES
-    std::vector<Complex> m_h_FT_D{};  ///< Displacement vectors
+    Complex* m_h_FT_D{ nullptr };  ///< Displacement vectors
 #endif
 
     fftwf_plan m_PlanHeight{ nullptr };
