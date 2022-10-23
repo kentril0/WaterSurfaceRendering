@@ -188,15 +188,16 @@ float WSTessendorf::ComputeWaves(float t)
             for (uint32_t n = 0; n < kTileSize; ++n)
             {
                 const uint32_t kIndex = m * kTileSize + n;
-                const glm::vec2& kWaveVec = m_WaveVectors[kIndex];
-
-                m_h_FT_slopeX[kIndex] = Complex(0, kWaveVec.x) * m_h_FT[kIndex];
-                m_h_FT_slopeZ[kIndex] = Complex(0, kWaveVec.y) * m_h_FT[kIndex];
+                m_h_FT_slopeX[kIndex] =
+                    Complex(0, m_WaveVectors[kIndex].x) * m_h_FT[kIndex];
+                m_h_FT_slopeZ[kIndex] =
+                    Complex(0, m_WaveVectors[kIndex].y) * m_h_FT[kIndex];
             }
 
     #ifdef CHOPPY_WAVES
         // Displacement vectors
         for (uint32_t m = 0; m < kTileSize; ++m)
+        {
             for (uint32_t n = 0; n < kTileSize; ++n)
             {
                 const uint32_t kIndex = m * kTileSize + n;
@@ -205,6 +206,7 @@ float WSTessendorf::ComputeWaves(float t)
                 m_h_FT_D[kIndex] = Complex(-kUWaveVec.x * m_h_FT[kIndex].imag(),
                                            -kUWaveVec.y * m_h_FT[kIndex].imag());
             }
+        }
     #endif
     }
 
@@ -302,7 +304,7 @@ float WSTessendorf::ComputeWaves(float t)
         }
     }
 
-    VKP_LOG_INFO("Compute waves took: {} ms", timer.ElapsedMillis());
+    VKP_LOG_INFO("COMPUTE_WAVES: post: {:f} ms", timer.ElapsedMicro() * 0.001);
     return NormalizeHeights(minHeight, maxHeight);
 }
 
@@ -326,6 +328,8 @@ void WSTessendorf::SetTileSize(uint32_t size)
     const bool kSizeIsPowerOfTwo = ( size & (size-1) ) == 0;
     VKP_ASSERT_MSG(size > 0 && kSizeIsPowerOfTwo,
                    "Tile size must be power of two");
+    if (!kSizeIsPowerOfTwo)
+        return;
 
     m_TileSize = size;
 }
