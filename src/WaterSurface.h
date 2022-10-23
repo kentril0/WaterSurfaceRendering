@@ -84,7 +84,9 @@ private:
     // GUI:
 
     void UpdateGui();
+    void ShowStatusWindow() const;
     void ShowCameraSettings();
+    void ShowWaterSurfaceSettings();
 
 private:
     std::unique_ptr<vkp::RenderPass> m_RenderPass;  // TODO maybe into app
@@ -128,6 +130,7 @@ private:
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera;
+    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 12.f, -14.f };
 
     // -------------------------------------------------------------------------
     // Water Surfaces
@@ -141,6 +144,24 @@ private:
 
     struct WaterSurfaceUBO
     {
+        /*
+        float time;             ///< Elapsed time in seconds since the start
+        glm::vec2 resolution;   ///< Viewport resolution in pixels, w x h
+        alignas(16) glm::vec3 camPosition{ 0.0, 500.0, 0.0};
+        alignas(16) glm::vec3 viewMatRow0;
+        alignas(16) glm::vec3 viewMatRow1;
+        alignas(16) glm::vec3 viewMatRow2;
+        float camFOV          { 1.5 };   // Radians
+        float camNear         { 0.1 };
+        float camFar          { 2000. };
+        alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
+        // vec4(vec3(suncolor), sunIntensity)
+        alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
+        alignas(16) glm::vec3 skyColor        { 0.4, 0.75, 1.0 };
+        alignas(16) glm::vec3 skyHorizontColor{ 0.7, 0.75, 0.8 };
+        alignas(16) glm::vec3 fillLight  { 0.5, 0.8, 0.9 };
+        alignas(16) glm::vec3 bounceLight{ 0.7, 0.3, 0.2 };
+        */
         float heightAmp{ 1.0 };  ///< Water surface height amplitude
     };
 
@@ -170,6 +191,39 @@ private:
     };
 
     std::unique_ptr<vkp::Pipeline> m_WSMeshPipeline;
+
+    // -------------------------------------------------------------------------
+    // GUI stuff
+
+    template<typename T, size_t S>
+    struct StringToVkTypes
+    {
+        const char* strings[S];
+        const T types[S];
+        constexpr T operator[](int i) const { return types[i]; }
+        constexpr operator auto() const { return strings; }
+        constexpr int size() const { return std::size(strings); }
+    };
+
+    // Should correspond to WaterSurfaceMesh::s_kMaxSize and s_kMinSize range
+    static inline const StringToVkTypes<uint32_t, 9> s_kWSResolutions{
+        { "4", "8", "16", "32", "64", "128", "256", "512", "1024" },
+        { 4, 8, 16, 32, 64, 128, 256, 512, 1024 }
+    };
+
+    /*
+    static constexpr auto s_kWSResolutions{[]() constexpr{
+        // TODO: size should be computed using log2 of sizes, but due to
+        //  its implementation using SIMD, it cannot be constexpr
+        constexpr uint32_t kSize = 9;
+        std::array<uint32_t, kSize> result{};
+        result[0] = WaterSurfaceMesh::s_kMinSize;
+        for (uint32_t i = 1; i < kSize; ++i)
+            result[i] = result[i-1] * 2;
+
+        return result;
+    }()};
+    */
 };
 
 #endif // WATER_SURFACE_RENDERING_WATER_SURFACE_H_

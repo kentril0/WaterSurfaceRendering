@@ -336,9 +336,10 @@ void WaterSurface::CreateCamera()
     const VkExtent2D kSwapChainExtent = m_SwapChain->GetExtent();
 
     m_Camera = std::make_unique<vkp::Camera>(
-        kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height)
+        kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height),
+        s_kCamStartPos
     );
-    m_Camera->SetPitch(-45.0f);
+    m_Camera->SetPitch(-60.0f);
     m_Camera->SetYaw(90.0f);
     m_Camera->SetFov(1.5);
     m_Camera->SetNear(0.1f);
@@ -588,6 +589,8 @@ void WaterSurface::UpdateGui()
 {
     gui::NewFrame();
 
+    ShowStatusWindow();
+
     if (m_State != States::GuiControls)
         return;
 
@@ -600,7 +603,29 @@ void WaterSurface::UpdateGui()
     ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
 
     ShowCameraSettings();
+    ShowWaterSurfaceSettings();
 
+    ImGui::End();
+}
+
+void WaterSurface::ShowStatusWindow() const
+{
+    const float kIsControlsHidden =
+        static_cast<float>(m_State != States::GuiControls);
+    const float kAlphaValue = 0.1 * kIsControlsHidden + 
+                              1.0 * (1.0-kIsControlsHidden);
+    ImGui::SetNextWindowBgAlpha(kAlphaValue);
+
+    if (!ImGui::Begin("Application Metrics"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    // Show frametime and FPS
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+                1000.0f / io.Framerate, io.Framerate);
     ImGui::End();
 }
 
@@ -639,5 +664,62 @@ void WaterSurface::ShowCameraSettings()
             m_Camera->SetFar(camFar);
 
         ImGui::NewLine();
+    }
+}
+
+void WaterSurface::ShowWaterSurfaceSettings()
+{
+    if (ImGui::CollapsingHeader("Water Surface settings",
+                                ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        static int tileRes = 6;
+        const char* resName =
+            (tileRes >= 0 && tileRes < s_kWSResolutions.size())
+            ? s_kWSResolutions.strings[tileRes]
+            : "Unknown";
+
+        static float tileLen = m_WSTess->GetTileLength();
+        static glm::vec2 windDir = m_WSTess->GetWindDir();
+        static float lambda = m_WSTess->GetDisplacementLambda();
+        static float animPeriod = m_WSTess->GetAnimationPeriod();
+        static bool m_GuiPlayAnimation = true;
+        static float phillipsA = m_WSTess->GetPhillipsConst();
+        static float damping = m_WSTess->GetDamping();
+
+        ImGui::SliderInt("Tile Resolution", &tileRes, 0,
+                         s_kWSResolutions.size() -1, resName);
+        ImGui::DragFloat("Tile Length", &tileLen, 2.0f, 0.0f, 1024.0f, "%.0f");
+        ImGui::DragFloat2("Wind Direction", glm::value_ptr(windDir),
+                          0.1f, 0.0f, 0.0f, "%.1f");
+        ImGui::DragFloat(" Lambda", &lambda,
+                              0.1f, -8.0f, 8.0f, "%.1f");
+        ImGui::DragFloat("Animation Period", &animPeriod, 1.0f, 1.0f, 0.0f, "%.0f");
+        ImGui::Checkbox(" Animation ", &m_GuiPlayAnimation);
+
+        if (ImGui::TreeNodeEx("Phillips Spectrum", 
+                              ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::DragFloat("A constant", &phillipsA, 0.00001f, 0.0f, 1.0f,
+                             "%.5f");
+            ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
+                             "%.4f");
+            ImGui::TreePop();
+        }
+
+        if (ImGui::Button("Apply"))
+        {
+            m_WSTess->SetTileSize(s_kWSResolutions[tileRes]);
+            m_WSTess->SetTileLength(tileLen);
+            m_WSTess->SetWindDirection(windDir);
+            m_WSTess->SetAnimationPeriod(animPeriod);
+            m_WSTess->SetPhillipsConst(phillipsA);
+            m_WSTess->SetLambda(lambda);
+            m_WSTess->SetDamping(damping);
+
+            m_WSTess->Prepare();
+
+            PrepareWaterSurfaceMesh(m_WSTess->GetTileSize(),
+                                    m_WSTess->GetTileLength());
+        }
     }
 }
