@@ -23,6 +23,9 @@ class WaterSurfaceMesh
 public:
     struct Vertex;
 
+    static const uint32_t s_kMinSize{ 4 };
+    static const uint32_t s_kMaxSize{ 1024 };
+
 public:
     /**
      * @brief Creates vertex and index buffers to accomodate maximum size of
@@ -87,9 +90,6 @@ private:
                      const uint32_t kIndexCount) const;
 
 private:
-    static const uint32_t s_kMinSize{ 4 };
-    static const uint32_t s_kMaxSize{ 1024 };
-
     uint32_t m_Size{ 0 };
     float m_Scale{ 0.0 };
 

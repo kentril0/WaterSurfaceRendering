@@ -58,6 +58,7 @@ void WaterSurfaceMesh::Prepare(uint32_t size,
     InitIndices();
 
     MapVertexBufferToCurrentSize();
+    UpdateVertexBuffer();
     CopyIndicesToIndexBuffer(stagingBuffer, cmdBuffer);
 }
 
@@ -69,8 +70,8 @@ void WaterSurfaceMesh::InitVertices()
 
     const glm::vec4 kDefaultNormal(0.0f, 1.0f, 0.0f, 0.0f);
 
-    const float kSize = m_Size;
-    const auto kSize1 = kSize + 1;
+    const uint32_t kSize = m_Size;
+    const uint32_t kSize1 = kSize + 1;
     // TODO benchmark
     // const float kScaleDivSize = m_Scale / m_Size;
     // const float kHalfSize = m_Size / 2.0f;
@@ -99,8 +100,8 @@ void WaterSurfaceMesh::InitIndices()
     m_Indices.resize( GetTotalIndexCount() );
 
     // TODO benchmark with member and local
-    const auto kSize = m_Size;
-    const auto kSize1 = m_Size+1;
+    const uint32_t kSize = m_Size;
+    const uint32_t kSize1 = kSize+1;
 
     uint32_t index = 0;
     for (uint32_t y = 0; y < kSize; ++y)
