@@ -19,7 +19,7 @@
 namespace vkp
 {
 
-    Texture2D::Texture2D(Device& device)
+    Texture2D::Texture2D(const Device& device)
         : m_Device(device),
           m_Image(device),
           m_ImageView(device),

@@ -48,12 +48,11 @@ namespace vkp
 
     public:
         /**
-         * @brief Sets up the texture for subsequent creation with the
+         * @brief Sets up the texture resources for subsequent creation with the
          *  'Create' call. 
          * @param device Created logical device
          */
-        Texture2D(Device& device);
-
+        Texture2D(const Device& device);
         ~Texture2D(); 
 
         /**
@@ -214,7 +213,7 @@ namespace vkp
         void ClearDirty() { m_IsDirty = false; }
 
     private:
-        Device& m_Device;
+        const Device& m_Device;
         std::string_view m_Filename;
 
         // ---------------------------------------------------------------------
