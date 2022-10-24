@@ -25,16 +25,13 @@ void WaterSurfaceMesh::CreateBuffers(const vkp::Device& device)
     VKP_REGISTER_FUNCTION();
 
     m_VertexBuffer.reset( new vkp::Buffer(device) );
+    m_IndexBuffer.reset( new vkp::Buffer(device) );
 
-    // Create Vertex buffer on host
     const VkDeviceSize kVerticesSize = sizeof(Vertex) * GetMaxVertexCount();
     m_VertexBuffer->Create(kVerticesSize,
+                           VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    // Create index buffer on device
-    m_IndexBuffer.reset( new vkp::Buffer(device) );
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     const VkDeviceSize kIndicesSize = sizeof(uint32_t) * GetMaxIndexCount();
     m_IndexBuffer->Create(kIndicesSize,
@@ -43,10 +40,11 @@ void WaterSurfaceMesh::CreateBuffers(const vkp::Device& device)
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 }
 
-void WaterSurfaceMesh::Prepare(uint32_t size,
-                               float scale,
-                               vkp::Buffer& stagingBuffer,
-                               VkCommandBuffer cmdBuffer)
+void WaterSurfaceMesh::PrepareVerticesIndices(
+    uint32_t size,
+    float scale,
+    vkp::Buffer& stagingBuffer,
+    VkCommandBuffer cmdBuffer)
 {
     if (size == m_Size)
         return;
@@ -55,11 +53,10 @@ void WaterSurfaceMesh::Prepare(uint32_t size,
     m_Scale = glm::max(0.001f, scale);
 
     InitVertices();
-    InitIndices();
+    StageCopyVerticesToVertexBuffer(stagingBuffer, cmdBuffer);
 
-    MapVertexBufferToCurrentSize();
-    UpdateVertexBuffer();
-    CopyIndicesToIndexBuffer(stagingBuffer, cmdBuffer);
+    InitIndices();
+    StageCopyIndicesToIndexBuffer(stagingBuffer, cmdBuffer);
 }
 
 void WaterSurfaceMesh::InitVertices()
@@ -67,8 +64,6 @@ void WaterSurfaceMesh::InitVertices()
     VKP_REGISTER_FUNCTION();
 
     m_Vertices.resize( GetVertexCount() );
-
-    const glm::vec4 kDefaultNormal(0.0f, 1.0f, 0.0f, 0.0f);
 
     const uint32_t kSize = m_Size;
     const uint32_t kSize1 = kSize + 1;
@@ -79,16 +74,12 @@ void WaterSurfaceMesh::InitVertices()
     {
         for (uint32_t x = 0; x < kSize1; ++x)
         {
-            auto& vertex = m_Vertices[y * kSize1 + x];
-
-            vertex.pos = glm::vec4(
+            m_Vertices[y * kSize1 + x].pos = glm::vec4(
                 (x - kSize / 2.0f) * m_Scale / kSize,
                 0.0f,   // Must be zero
                 (y - kSize / 2.0f) * m_Scale / kSize,
                 0.0f
             );
-
-            vertex.normal = kDefaultNormal;
         }
     }
 }
@@ -124,36 +115,47 @@ void WaterSurfaceMesh::InitIndices()
     m_IndicesCount = index;
 }
 
-void WaterSurfaceMesh::UpdateVertexBuffer()
-{
-    m_VertexBuffer->CopyToMapped(m_Vertices.data(),
-                                 sizeof(Vertex) * GetVertexCount() );
-}
-
-void WaterSurfaceMesh::MapVertexBufferToCurrentSize()
-{
-    m_VertexBuffer->Unmap();
-
-    auto err = m_VertexBuffer->Map( sizeof(Vertex) * GetVertexCount() );
-    VKP_ASSERT_RESULT(err);
-}
-
-void WaterSurfaceMesh::CopyIndicesToIndexBuffer(vkp::Buffer& stagingBuffer,
-                                                VkCommandBuffer cmdBuffer)
+void WaterSurfaceMesh::StageCopyVerticesToVertexBuffer(
+    vkp::Buffer& stagingBuffer,
+    VkCommandBuffer cmdBuffer)
 {
     VKP_REGISTER_FUNCTION();
+    //  ----------------------------------
+    // | Vertices [B] | Indices [B] | ... |
+    //  ----------------------------------
+    // mapped
 
-    VKP_ASSERT(m_IndicesCount > 0);
-    const VkDeviceSize kIndicesSize = sizeof(uint32_t) * m_IndicesCount;
-
-    stagingBuffer.Create(kIndicesSize,
-                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    stagingBuffer.Fill(m_Indices.data(), kIndicesSize);
+    const VkDeviceSize kVerticesSize = sizeof(Vertex) * GetVertexCount();
+    stagingBuffer.CopyToMapped(m_Vertices.data(), kVerticesSize);
 
     VkBufferCopy copyRegion{};
     copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = kVerticesSize;
+
+    m_VertexBuffer->StageCopy(stagingBuffer, &copyRegion, cmdBuffer);
+}
+
+void WaterSurfaceMesh::StageCopyIndicesToIndexBuffer(
+    vkp::Buffer& stagingBuffer, VkCommandBuffer cmdBuffer)
+{
+    VKP_REGISTER_FUNCTION();
+    VKP_ASSERT(m_IndicesCount > 0);
+
+    const VkDeviceSize kVerticesSize = sizeof(Vertex) * GetVertexCount();
+    const VkDeviceSize kIndicesSize = sizeof(uint32_t) * m_IndicesCount;
+
+    void* dataAddr = stagingBuffer.GetMappedAddress();
+    stagingBuffer.CopyToMapped(
+        m_Indices.data(),
+        kIndicesSize,
+        static_cast<void*>(
+            static_cast<uint8_t*>(dataAddr) + kVerticesSize
+        )
+    );
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = kVerticesSize;
     copyRegion.dstOffset = 0;
     copyRegion.size = kIndicesSize;
 

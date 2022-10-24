@@ -43,10 +43,10 @@ public:
      *  to transfer indices to index buffer 
      * @param cmdBuffer Command buffer in recording state to record copy cmd to
      */
-    void Prepare(uint32_t size,
-                 float scale,
-                 vkp::Buffer& stagingBuffer,
-                 VkCommandBuffer cmdBuffer);
+    void PrepareVerticesIndices(uint32_t size,
+                                float scale,
+                                vkp::Buffer& stagingBuffer,
+                                VkCommandBuffer cmdBuffer);
 
     void Render(VkCommandBuffer cmdBuffer);
 
@@ -56,14 +56,14 @@ public:
     /** @brief Copies current vertices to vertex buffer and flushes
      *  Use to see changes after modification of vertices.
      */
-    void UpdateVertexBuffer();
+    //void UpdateVertexBuffer();
 
-private:
-
-    void CreateBuffers(const vkp::Device& device);
-
-    void InitVertices();
-    void InitIndices();
+    static uint32_t GetMaxVertexCount() { return (s_kMaxSize+1) * (s_kMaxSize+1); }
+    static uint32_t GetMaxIndexCount()
+    {
+        const uint32_t kTrianglesPerQuad = 2, kIndicesPerTriangle = 3;
+        return s_kMaxSize*s_kMaxSize * kTrianglesPerQuad * kIndicesPerTriangle;
+    }
 
     //                                  m_Size*(m_Size+2)+1
     uint32_t GetVertexCount() const { return (m_Size+1) * (m_Size+1); }
@@ -73,17 +73,19 @@ private:
         const uint32_t kTrianglesPerQuad = 2, kIndicesPerTriangle = 3;
         return m_Size * m_Size * kTrianglesPerQuad * kIndicesPerTriangle;
     }
+    uint32_t GetCurrentIndexCount() const { return m_IndicesCount; }
 
-    uint32_t GetMaxVertexCount() const { return (s_kMaxSize+1) * (s_kMaxSize+1); }
-    uint32_t GetMaxIndexCount() const
-    {
-        const uint32_t kTrianglesPerQuad = 2, kIndicesPerTriangle = 3;
-        return s_kMaxSize*s_kMaxSize * kTrianglesPerQuad * kIndicesPerTriangle;
-    }
+private:
 
-    void MapVertexBufferToCurrentSize();
-    void CopyIndicesToIndexBuffer(vkp::Buffer& stagingBuffer,
-                                  VkCommandBuffer cmdBuffer);
+    void CreateBuffers(const vkp::Device& device);
+
+    void InitVertices();
+    void InitIndices();
+
+    void StageCopyVerticesToVertexBuffer(vkp::Buffer& stagingBuffer,
+                                         VkCommandBuffer cmdBuffer);
+    void StageCopyIndicesToIndexBuffer(vkp::Buffer& stagingBuffer,
+                                       VkCommandBuffer cmdBuffer);
 
     void BindBuffers(VkCommandBuffer cmdBuffer) const;
     void DrawIndexed(VkCommandBuffer cmdBuffer,
@@ -93,10 +95,10 @@ private:
     uint32_t m_Size{ 0 };
     float m_Scale{ 0.0 };
 
+    uint32_t m_IndicesCount{ 0 };       ///< Real number of indices used
+
     std::vector<Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;
-
-    uint32_t m_IndicesCount{ 0 };
 
     std::unique_ptr<vkp::Buffer> m_VertexBuffer;
     std::unique_ptr<vkp::Buffer> m_IndexBuffer;
@@ -104,8 +106,7 @@ private:
 
 struct WaterSurfaceMesh::Vertex
 {
-    glm::vec4 pos;
-    glm::vec4 normal;
+    glm::vec3 pos;
 
     constexpr static VkVertexInputBindingDescription GetBindingDescription()
     {
@@ -123,14 +124,8 @@ struct WaterSurfaceMesh::Vertex
             {
                 .location = 0,
                 .binding = 0,
-                .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
                 .offset = offsetof(Vertex, pos)
-            },
-            {
-                .location = 1,
-                .binding = 0,
-                .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                .offset = offsetof(Vertex, normal)
             }
         };
     }
