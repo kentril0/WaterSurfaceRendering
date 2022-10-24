@@ -47,8 +47,9 @@ public:
 
 public:
     /**
-     * @brief Sets up the surface's properties and prepares it for
-     *  subsequent computation of waves using "ComputeWaves()" fnc.
+     * @brief Sets up the surface's properties.
+     *  1. Call "Prepare()" to setup necessary structures for computation of waves
+     *  2. Call "ComputeWaves()" fnc.
      * @param tileSize Size of the tile, is the number of points and waves,
      *  must be power of two
      * @param tileLength Length of tile, or wave length
@@ -66,18 +67,23 @@ public:
     ~WSTessendorf();
 
     /**
+     * @brief Recreates necessary structures to accomodate previously
+     *  set properties.
+     * @param pDisplacements Pointer to allocated memory where to compute
+     *  displacements, if nullptr then uses own structures instead.
+     * @param pNormals Pointer to allocated memory where to compute
+     *  normals, if nullptr then uses own structures instead.
+     */
+    void Prepare(Displacement* pDisplacements = nullptr,
+                 Normal* pNormals = nullptr);
+
+    /**
      * @brief Computes the wave height, horizontal displacement,
      *  and normal for each vertex. "Prepare()" must be called once before.
      * @param time Elapsed time in seconds
      * @return Amplitude of normalized heights (in <-1, 1> )
      */
     float ComputeWaves(float time);
-
-    /**
-     * @brief Recreates needed structures to accomodate set properties,
-     *  Use to see changes after setting properties.
-     */
-    void Prepare();
 
     // ---------------------------------------------------------------------
     // Getters
@@ -92,17 +98,17 @@ public:
 
     // Data
 
-    size_t GetDisplacementCount() const { return m_Displacements.size(); }
-    const Displacement* GetDisplacementData() const {
-        return m_Displacements.data();
-    }
-    const std::vector<Displacement>& GetDisplacements() const {
+    size_t GetDisplacementCount() const { return m_DisplacementData.size(); }
+    const Displacement* GetDisplacements() const {
         return m_Displacements;
     }
+    const std::vector<Displacement>& GetDisplacementData() const {
+        return m_DisplacementData;
+    }
 
-    size_t GetNormalsCount() const { return m_Normals.size(); }
-    const std::vector<Normal>& GetNormals() const { return m_Normals; }
-    const Normal* GetNormalsData() const { return m_Normals.data(); }
+    size_t GetNormalsCount() const { return m_NormalData.size(); }
+    const Normal* GetNormals() const { return m_Normals; }
+    const std::vector<Normal>& GetNormalsData() const { return m_NormalData; }
 
     // ---------------------------------------------------------------------
     // Setters
@@ -153,11 +159,13 @@ private:
     // -------------------------------------------------------------------------
     // Data
 
-    // vec4(Displacement_X, height, Displacement_Z, padding)
-    std::vector<Displacement> m_Displacements;
+    Displacement* m_Displacements{ nullptr };
+    Normal*       m_Normals{ nullptr };
 
+    // vec4(Displacement_X, height, Displacement_Z, padding)
+    std::vector<Displacement> m_DisplacementData;
     // vec4(normal_X, normal_Y, normal_Z, padding)
-    std::vector<Normal> m_Normals;
+    std::vector<Normal> m_NormalData;
 
     // =========================================================================
     // Computation

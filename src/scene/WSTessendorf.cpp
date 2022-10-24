@@ -18,8 +18,6 @@ WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength,
     SetWindDirection(windDir);
     SetAnimationPeriod(animationPeriod);
     SetPhillipsConst(phillipsConst);
-
-    Prepare();
 }
 
 WSTessendorf::~WSTessendorf()
@@ -29,7 +27,8 @@ WSTessendorf::~WSTessendorf()
     DestroyFFTW();
 }
 
-void WSTessendorf::Prepare()
+void WSTessendorf::Prepare(Displacement* pDisplacements,
+                           Normal* pNormals)
 {
     // TODO timer
     VKP_REGISTER_FUNCTION();
@@ -41,12 +40,30 @@ void WSTessendorf::Prepare()
 
     const uint32_t kTileSize1 = m_TileSize +1;
 
-    const Displacement kDefaultDisplacement{ 0.0 };
-    m_Displacements.resize(kTileSize1 * kTileSize1, kDefaultDisplacement);
+    // Set data pointers
 
-    const Normal kDefaultNormal{ 0.0, 1.0, 0.0, 0.0 };
-    m_Normals.resize(kTileSize1 * kTileSize1, kDefaultNormal);
-    
+    if (pDisplacements == nullptr)
+    {
+        const Displacement kDefaultDisplacement{ 0.0 };
+        m_DisplacementData.resize(kTileSize1 * kTileSize1, kDefaultDisplacement);
+        m_Displacements = m_DisplacementData.data();
+    }
+    else
+    {
+        m_Displacements = pDisplacements;
+    }
+
+    if (pNormals == nullptr)
+    {
+        const Normal kDefaultNormal{ 0.0, 1.0, 0.0, 0.0 };
+        m_NormalData.resize(kTileSize1 * kTileSize1, kDefaultNormal);
+        m_Normals = m_NormalData.data();
+    }
+    else
+    {
+        m_Normals = pNormals;
+    }
+
     DestroyFFTW();
     SetupFFTW();
 }
@@ -313,7 +330,8 @@ float WSTessendorf::NormalizeHeights(float minHeight, float maxHeight)
     const float A = glm::max( glm::abs(minHeight), glm::abs(maxHeight) );
     const float OneOverA = 1.f / A;
 
-    for (size_t i = 0; i < m_Displacements.size(); ++i)
+    const uint32_t kSize = (m_TileSize+1) * (m_TileSize+1);
+    for (uint32_t i = 0; i < kSize; ++i)
     {
         m_Displacements[i].y *= OneOverA;
     }
