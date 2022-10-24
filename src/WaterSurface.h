@@ -12,6 +12,7 @@
 #include "vulkan/Descriptors.h"
 #include "vulkan/ShaderModule.h"
 #include "vulkan/Pipeline.h"
+#include "vulkan/Texture2D.h"
 
 #include "scene/WSTessendorf.h"
 #include "scene/WaterSurfaceMesh.h"
@@ -76,10 +77,13 @@ private:
     void UpdateWaterSurfaceMesh();
     void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
                                 const uint32_t frameIndex);
+    void CopyToWaterSurfaceMaps(VkCommandBuffer commandBuffer);
 
     // On properties change:
 
     void PrepareWaterSurfaceMesh(uint32_t size, float scale);
+    void PrepareWaterSurfaceTextures(uint32_t size,
+                                     const VkFormat kMapFormat);
 
     // GUI:
 
@@ -89,7 +93,7 @@ private:
     void ShowWaterSurfaceSettings();
 
 private:
-    std::unique_ptr<vkp::RenderPass> m_RenderPass;  // TODO maybe into app
+    std::unique_ptr<vkp::RenderPass> m_RenderPass{ nullptr };  // TODO maybe into app
 
     // TODO maybe into App
     std::array<VkClearValue, 2> m_ClearValues{
@@ -103,7 +107,7 @@ private:
     // -------------------------------------------------------------------------
     // Resource Descriptors
 
-    std::unique_ptr<vkp::DescriptorPool> m_DescriptorPool;
+    std::unique_ptr<vkp::DescriptorPool> m_DescriptorPool{ nullptr };
 
     // Uniform buffer for each swap chain image
     //   Cleanup after fininshed rendering or on swap chain recreation
@@ -129,7 +133,7 @@ private:
 
     // Assets
 
-    std::unique_ptr<vkp::Camera> m_Camera;
+    std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
     static constexpr glm::vec3 s_kCamStartPos{ 0.f, 12.f, -14.f };
 
     // -------------------------------------------------------------------------
@@ -168,11 +172,21 @@ private:
     VertexUBO m_VertexUBO{};
     WaterSurfaceUBO m_WaterSurfaceUBO{};
 
-    std::unique_ptr<vkp::DescriptorSetLayout> m_WSMeshDescriptorSetLayout;
+    std::unique_ptr<vkp::DescriptorSetLayout> m_WSMeshDescriptorSetLayout{ nullptr };
     std::vector<VkDescriptorSet> m_WSMeshDescriptorSets;
 
-    std::unique_ptr<WSTessendorf> m_WSTess;
-    std::unique_ptr<WaterSurfaceMesh> m_WSMesh;
+    std::unique_ptr<WSTessendorf> m_WSTess{ nullptr };
+    std::unique_ptr<WaterSurfaceMesh> m_WSMesh{ nullptr };
+
+    // -------------------------------------------------------------------------
+    // Water Surface textures
+    //  both heightmap and normalmap are generated on the CPU, then 
+    //  transferred to the GPU, per frame
+
+    std::unique_ptr<vkp::Buffer> m_StagingBuffer{ nullptr };
+
+    std::unique_ptr<vkp::Texture2D> m_DisplacementMap{ nullptr };
+    std::unique_ptr<vkp::Texture2D> m_NormalMap{ nullptr };
 
     // -------------------------------------------------------------------------
     // Rendering water surface as a mesh
@@ -190,40 +204,27 @@ private:
         }
     };
 
-    std::unique_ptr<vkp::Pipeline> m_WSMeshPipeline;
+    std::unique_ptr<vkp::Pipeline> m_WSMeshPipeline{ nullptr };
 
     // -------------------------------------------------------------------------
     // GUI stuff
 
     template<typename T, size_t S>
-    struct StringToVkTypes
+    struct ValueStringArray
     {
-        const char* strings[S];
         const T types[S];
+        const char* strings[S];
         constexpr T operator[](int i) const { return types[i]; }
         constexpr operator auto() const { return strings; }
-        constexpr int size() const { return std::size(strings); }
+        constexpr uint32_t size() const { return S; }
     };
 
     // Should correspond to WaterSurfaceMesh::s_kMaxSize and s_kMinSize range
-    static inline const StringToVkTypes<uint32_t, 9> s_kWSResolutions{
-        { "4", "8", "16", "32", "64", "128", "256", "512", "1024" },
-        { 4, 8, 16, 32, 64, 128, 256, 512, 1024 }
+    static constexpr ValueStringArray<uint32_t, 9> s_kWSResolutions{
+        { 4, 8, 16, 32, 64, 128, 256, 512, 1024 },
+        { "4", "8", "16", "32", "64", "128", "256", "512", "1024" }
     };
 
-    /*
-    static constexpr auto s_kWSResolutions{[]() constexpr{
-        // TODO: size should be computed using log2 of sizes, but due to
-        //  its implementation using SIMD, it cannot be constexpr
-        constexpr uint32_t kSize = 9;
-        std::array<uint32_t, kSize> result{};
-        result[0] = WaterSurfaceMesh::s_kMinSize;
-        for (uint32_t i = 1; i < kSize; ++i)
-            result[i] = result[i-1] * 2;
-
-        return result;
-    }()};
-    */
 };
 
 #endif // WATER_SURFACE_RENDERING_WATER_SURFACE_H_
