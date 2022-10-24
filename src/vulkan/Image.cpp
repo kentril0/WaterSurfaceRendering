@@ -197,8 +197,6 @@ namespace vkp
     void Image::TransitionLayout_DST_OPTIMALtoSHADER_READ(
         VkCommandBuffer cmdBuffer, VkPipelineStageFlags dstStage)
     {
-        VKP_REGISTER_FUNCTION();
-        VKP_LOG_INFO("{} {}", dstStage, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         VKP_ASSERT(m_Image != VK_NULL_HANDLE && 
                    m_ImageLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
