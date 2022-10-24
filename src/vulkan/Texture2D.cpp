@@ -6,10 +6,6 @@
 #include "pch.h"
 #include "vulkan/Texture2D.h"
 
-// Compilation issue: some compilers might have issue compiling with SIMD
-//  https://github.com/nothings/stb/issues/1258
-//  can be safely turned off, there is no continuous loading after initialization
-#define STBI_NO_SIMD
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
@@ -178,12 +174,12 @@ namespace vkp
 
     void Texture2D::CopyFromBuffer(VkCommandBuffer cmdBuffer,
                                    VkBuffer buffer, bool genMips,
-                                   VkPipelineStageFlags dstStage)
+                                   VkPipelineStageFlags dstStage,
+                                   uint32_t bufferOffset)
     {
-        VKP_REGISTER_FUNCTION();
         m_Image.TransitionLayoutToDST_OPTIMAL(cmdBuffer, dstStage);
 
-        CopyBufferToImage(cmdBuffer, buffer);
+        CopyBufferToImage(cmdBuffer, buffer, bufferOffset);
 
         if (genMips && m_MipLevels > 1)
         {
@@ -197,13 +193,13 @@ namespace vkp
     }
 
     void Texture2D::CopyBufferToImage(VkCommandBuffer cmdBuffer,
-        VkBuffer buffer)
+        VkBuffer buffer, uint32_t offset)
     {
         VKP_ASSERT(m_Image.GetLayout() == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         // Buffer data at offset 0, tightly-packed to whole image
         VkBufferImageCopy region = {
-            .bufferOffset = 0,
+            .bufferOffset = offset,
             // Tightly packed data
             .bufferRowLength = 0,
             .bufferImageHeight = 0,

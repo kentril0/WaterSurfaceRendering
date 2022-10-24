@@ -104,6 +104,11 @@ namespace vkp
             return m_Properties.limits.minUniformBufferOffsetAlignment;
         }
 
+        inline size_t GetNonCoherentAtomSize() const
+        {
+            return m_Properties.limits.nonCoherentAtomSize;
+        }
+
     private:
 
         void FindSupportedExtensions();
