@@ -49,7 +49,7 @@ void WSTessendorf::Prepare()
     DestroyFFTW();
     SetupFFTW();
 
-    VKP_LOG_INFO("PREPARED in : {:f} ms", timer.ElapsedMicro() * 0.001);
+    VKP_LOG_INFO("PREPARED in: {:f} ms", timer.ElapsedMicro() * 0.001);
 }
 
 std::vector<WSTessendorf::WaveVector> WSTessendorf::ComputeWaveVectors() const
@@ -214,31 +214,6 @@ float WSTessendorf::ComputeWaves(float t)
     //  [-m_TileSize/2, ..., 0, ..., m_TileSize/2]
     const float kSigns[] = { 1.0f, -1.0f };
 
-    /*
-    for (uint32_t m = 0; m < kTileSize; ++m)
-    {
-        for (uint32_t n = 0; n < kTileSize; ++n)
-        {
-            const uint32_t kIndex = m * kTileSize + n;
-            const uint32_t kIndex1 = m * kTileSize1 + n;
-            const int sign = kSigns[(n + m) & 1];
-
-            const auto h_FT = m_h_FT[kIndex].real() * static_cast<float>(sign);
-            maxHeight = glm::max(h_FT, maxHeight);
-            minHeight = glm::min(h_FT, minHeight);
-            m_Displacements[kIndex1].y = h_FT;
-
-            m_Normals[kIndex1] = glm::vec4(glm::normalize(glm::vec3(
-                -( sign * m_h_FT_slopeX[kIndex].real() ),
-                1.0f,
-                -( sign * m_h_FT_slopeZ[kIndex].real() )
-            )
-            ),
-            0.0f);
-        }
-    }
-    */
-
     for (uint32_t m = 0; m < kTileSize; ++m)
     {
         for (uint32_t n = 0; n < kTileSize; ++n)
@@ -261,51 +236,18 @@ float WSTessendorf::ComputeWaves(float t)
         }
     }
 
-    // Seamless tiling
-    /*
-    {
-        const uint32_t kIndex1 = 0 * kTileSize1 + 0;
-
-        m_Displacements[kIndex1 + kTileSize + kTileSize1 * kTileSize] = m_Displacements[kIndex1];
-        m_Normals[kIndex1 + kTileSize + kTileSize1 * kTileSize] = m_Normals[kIndex1];
-
-        m_Displacements[kIndex1 + kTileSize] = m_Displacements[kIndex1];
-        m_Normals[kIndex1 + kTileSize] = m_Normals[kIndex1];
-    }
-
-    {
-        for (uint32_t n = 1; n < kTileSize; ++n)
-        {
-            const uint32_t kIndex1 = 0 * kTileSize1 + n;
-
-            m_Displacements[kIndex1 + kTileSize1 * kTileSize] = m_Displacements[kIndex1];
-            m_Normals[kIndex1 + kTileSize1 * kTileSize] = m_Normals[kIndex1];
-        }
-
-        for (uint32_t m = 1; m < kTileSize; ++m)
-        {
-            const uint32_t kIndex1 = m * kTileSize1 + 0;
-            m_Displacements[kIndex1 + kTileSize] = m_Displacements[kIndex1];
-            m_Normals[kIndex1 + kTileSize] = m_Normals[kIndex1];
-        }
-    }
-    */
-
     VKP_LOG_INFO("COMPUTE_WAVES: post: {:f} ms", timer.ElapsedMicro() * 0.001);
     return NormalizeHeights(minHeight, maxHeight);
 }
 
 float WSTessendorf::NormalizeHeights(float minHeight, float maxHeight)
 {
+    vkp::Timer timer;
     const float A = glm::max( glm::abs(minHeight), glm::abs(maxHeight) );
     const float OneOverA = 1.f / A;
 
-    const uint32_t kSize = m_TileSize * m_TileSize;
-    //const uint32_t kSize = (m_TileSize+1) * (m_TileSize+1);
-    for (uint32_t i = 0; i < kSize; ++i)
-    {
-        m_Displacements[i].y *= OneOverA;
-    }
+    std::for_each(m_Displacements.begin(), m_Displacements.end(),
+                  [OneOverA](auto& d){ d.y *= OneOverA; });
 
     return A;
 }
