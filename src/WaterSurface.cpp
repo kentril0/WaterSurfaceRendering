@@ -21,6 +21,8 @@ WaterSurface::WaterSurface(AppCmdLineArgs args)
     m_Requirements.deviceFeatures.samplerAnisotropy = VK_TRUE;
     m_Requirements.queueFamilies = { VK_QUEUE_GRAPHICS_BIT };
     m_Requirements.presentationSupport = true;
+
+    m_DepthTestingEnabled = true;
 }
 
 WaterSurface::~WaterSurface()
@@ -103,7 +105,7 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
 void WaterSurface::Update(vkp::Timestep dt)
 {
     UpdateCamera(dt);
-    UpdateWaterSurfaceMesh();
+    UpdateWaterSurfaceModel();
     UpdateGui();
 }
 
@@ -259,21 +261,25 @@ void WaterSurface::CreateWSMeshDescriptorSetLayout()
     uint32_t bindingPoint = 0;
 
     m_WSMeshDescriptorSetLayout = vkp::DescriptorSetLayout::Builder(*m_Device)
+        // VertexUBO
         .AddBinding({
             .binding = bindingPoint++,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
         })
+        // WaterSurfaceUBO
         .AddBinding({
             .binding = bindingPoint++,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
         })
+        // Displacement map
         .AddBinding({
             .binding = bindingPoint++,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
         })
+        // Normal map
         .AddBinding({
             .binding = bindingPoint++,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -407,9 +413,7 @@ void WaterSurface::CreateWaterSurfaces()
 
     m_WSMesh.reset( new WaterSurfaceMesh(*m_Device) );
     m_WSTess.reset( new WSTessendorf() );
-
-    m_DisplacementMap = std::make_unique<vkp::Texture2D>(*m_Device);
-    m_NormalMap = std::make_unique<vkp::Texture2D>(*m_Device);
+    m_WSTess->Prepare();
 
     // TODO fnc: CreateWSStagingBuffer(VkFormat mapFormat)
 
@@ -435,6 +439,11 @@ void WaterSurface::CreateWaterSurfaces()
 
     PrepareWaterSurfaceMesh(m_WSTess->GetTileSize(), m_WSTess->GetTileLength());
     PrepareWaterSurfaceTextures(m_WSTess->GetTileSize(), kMapFormat);
+
+    UpdateWaterSurfaceModel();
+    vkp::CommandBuffer& cmdBuffer = BeginOneTimeCommands();
+        CopyToWaterSurfaceMaps(cmdBuffer);
+    EndOneTimeCommands(cmdBuffer);
 }
 
 void WaterSurface::PrepareWaterSurfaceMesh(uint32_t size, float scale)
@@ -446,12 +455,12 @@ void WaterSurface::PrepareWaterSurfaceMesh(uint32_t size, float scale)
 
     vkp::CommandBuffer& cmdBuffer = BeginOneTimeCommands();
 
-        m_WSMesh->PrepareVerticesIndices(size, scale, *m_StagingBuffer, cmdBuffer);
+        m_WSMesh->GenerateGrid(size, scale, *m_StagingBuffer, cmdBuffer);
 
         const VkDeviceSize kVerticesSize = sizeof(WaterSurfaceMesh::Vertex) *
                                            m_WSMesh->GetVertexCount();
         const VkDeviceSize kIndicesSize = sizeof(uint32_t) *
-                                          m_WSMesh->GetCurrentIndexCount();
+                                          m_WSMesh->GetIndexCount();
 
         m_StagingBuffer->FlushMappedRange(
             m_Device->GetNonCoherentAtomSizeAlignment(kVerticesSize + kIndicesSize)
@@ -466,13 +475,16 @@ void WaterSurface::PrepareWaterSurfaceTextures(uint32_t size,
     VKP_REGISTER_FUNCTION();
 
     // Textures are created empty, in layout destination optimal
+    m_Device->WaitIdle();
 
     vkp::CommandBuffer& cmdBuffer = BeginOneTimeCommands();
 
         const bool kUseMipMapping = false;
 
-        // TODO the size must be +1 in each dim
-        const uint32_t kSize = size+1;
+        m_DisplacementMap.reset( new vkp::Texture2D(*m_Device) );
+        m_NormalMap.reset( new vkp::Texture2D(*m_Device) );
+
+        const uint32_t kSize = size;
 
         m_DisplacementMap->Create(cmdBuffer, kSize, kSize, kMapFormat,
                                   kUseMipMapping,
@@ -485,17 +497,6 @@ void WaterSurface::PrepareWaterSurfaceTextures(uint32_t size,
                             VK_IMAGE_USAGE_SAMPLED_BIT);
 
     EndOneTimeCommands(cmdBuffer);
-
-    const VkDeviceSize kMapSize = vkp::Texture2D::FormatToBytes(kMapFormat) *
-                                    kSize * kSize;
-    void* stagingData = m_StagingBuffer->GetMappedAddress();
-
-    m_WSTess->Prepare(static_cast<WSTessendorf::Displacement*>(stagingData),
-                      static_cast<WSTessendorf::Normal*>(
-                        static_cast<void*>(
-                        static_cast<uint8_t*>(stagingData) + kMapSize
-                        )
-                      ));
 }
 
 // =============================================================================
@@ -605,50 +606,54 @@ void WaterSurface::UpdateCamera(vkp::Timestep dt)
     // Vulkan uses inverted Y coord in comparison to OpenGL (set by glm lib)
     // -> flip the sign on the scaling factor of the Y axis
     m_VertexUBO.proj[1][1] *= -1;
+    
+    const VkExtent2D screenExt = m_SwapChain->GetExtent();
+    m_WaterSurfaceUBO.resolution.x = static_cast<float>(screenExt.width);
+    m_WaterSurfaceUBO.resolution.y = static_cast<float>(screenExt.height);
+
+    m_WaterSurfaceUBO.camPos = m_Camera->GetPosition();
+    const glm::mat3 view = m_Camera->GetView();
+    m_WaterSurfaceUBO.viewMatRow0 = view[0];
+    m_WaterSurfaceUBO.viewMatRow1 = view[1];
+    m_WaterSurfaceUBO.viewMatRow2 = view[2];
+
+    m_WaterSurfaceUBO.camFOV = m_Camera->GetFov();
+    m_WaterSurfaceUBO.camNear = m_Camera->GetNear();
+    m_WaterSurfaceUBO.camFar = m_Camera->GetFar();
 }
 
-void WaterSurface::UpdateWaterSurfaceMesh()
+void WaterSurface::UpdateWaterSurfaceModel()
 {
-    m_WaterSurfaceUBO.heightAmp =
+    m_VertexUBO.WSHeightAmp =
         m_WSTess->ComputeWaves(m_LastFrameTime);
 
-    // >> Displacements, normals should be in stagingBuffers memory
+    // >> Copy displacements, normals to stagingBuffer
 
-    // TODO the range can be smaller
-    m_StagingBuffer->FlushMappedRange();
+    const VkDeviceSize kDisplacementsSize =
+        sizeof(WSTessendorf::Displacement) * m_WSTess->GetDisplacementCount();
 
+    m_StagingBuffer->CopyToMapped(
+        m_WSTess->GetDisplacements().data(),
+        kDisplacementsSize
+    );
 
-    // TODO update maps here, using fence and cmd buffer
+    const VkDeviceSize kNormalsSize =
+        sizeof(WSTessendorf::Normal) * m_WSTess->GetNormalCount();
 
+    void* stagingData = m_StagingBuffer->GetMappedAddress();
 
-/*
-    const auto& displacements = m_WSTess->GetDisplacements();
-    const auto& normals = m_WSTess->GetNormals();
+    m_StagingBuffer->CopyToMapped(
+        m_WSTess->GetNormals().data(),
+        kNormalsSize,
+        static_cast<void*>(
+            static_cast<uint8_t*>(stagingData) + kDisplacementsSize
+        )
+    );
 
-    auto& vertices = m_WSMesh->GetVertices();
-    static std::vector<glm::vec4> orgPositions;
-    static bool once = true;
-    if (once)
-    {
-        orgPositions.reserve(vertices.size());
-        std::transform(vertices.begin(), vertices.end(),
-                       std::back_inserter(orgPositions),
-                       [](const WaterSurfaceMesh::Vertex& v) { return v.pos; });
-        once = false;
-    }
-
-    // TODO benchmark loop
-    VKP_ASSERT(vertices.size() == displacements.size() &&
-               vertices.size() == normals.size());
-    for (uint32_t i = 0; i < vertices.size(); ++i)
-    {
-        vertices[i].pos.y = orgPositions[i].y +
-                          m_WaterSurfaceUBO.heightAmp * displacements[i].y;
-        vertices[i].normal = normals[i];
-    }
-
-    m_WSMesh->UpdateVertexBuffer();
-*/
+    m_StagingBuffer->FlushMappedRange(
+        m_Device->GetNonCoherentAtomSizeAlignment(
+            kDisplacementsSize + kNormalsSize)
+    );
 }
 
 void WaterSurface::CopyToWaterSurfaceMaps(VkCommandBuffer commandBuffer)
@@ -658,7 +663,8 @@ void WaterSurface::CopyToWaterSurfaceMaps(VkCommandBuffer commandBuffer)
     m_DisplacementMap->CopyFromBuffer(commandBuffer,
                                       *m_StagingBuffer,
                                       kGenMipmaps,
-                                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                                      //VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                                       0);
 
     const VkFormat kMapFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -743,6 +749,7 @@ void WaterSurface::UpdateGui()
 
     ShowCameraSettings();
     ShowWaterSurfaceSettings();
+    ShowLightingSettings();
 
     ImGui::End();
 }
@@ -817,19 +824,23 @@ void WaterSurface::ShowWaterSurfaceSettings()
             ? s_kWSResolutions.strings[tileRes]
             : "Unknown";
 
+        static bool m_GuiPlayAnimation = true;
+
         static float tileLen = m_WSTess->GetTileLength();
         static glm::vec2 windDir = m_WSTess->GetWindDir();
-        static float lambda = m_WSTess->GetDisplacementLambda();
+        static float windSpeed = m_WSTess->GetWindSpeed();
         static float animPeriod = m_WSTess->GetAnimationPeriod();
-        static bool m_GuiPlayAnimation = true;
         static float phillipsA = m_WSTess->GetPhillipsConst();
         static float damping = m_WSTess->GetDamping();
+        static float lambda = m_WSTess->GetDisplacementLambda();
 
         ImGui::SliderInt("Tile Resolution", &tileRes, 0,
                          s_kWSResolutions.size() -1, resName);
         ImGui::DragFloat("Tile Length", &tileLen, 2.0f, 0.0f, 1024.0f, "%.0f");
+        // TODO unit
         ImGui::DragFloat2("Wind Direction", glm::value_ptr(windDir),
                           0.1f, 0.0f, 0.0f, "%.1f");
+        ImGui::DragFloat(" Wind Speed", &windSpeed, 0.1f);
         ImGui::DragFloat(" Lambda", &lambda,
                               0.1f, -8.0f, 8.0f, "%.1f");
         ImGui::DragFloat("Animation Period", &animPeriod, 1.0f, 1.0f, 0.0f, "%.0f");
@@ -850,15 +861,37 @@ void WaterSurface::ShowWaterSurfaceSettings()
             m_WSTess->SetTileSize(s_kWSResolutions[tileRes]);
             m_WSTess->SetTileLength(tileLen);
             m_WSTess->SetWindDirection(windDir);
+            m_WSTess->SetWindSpeed(windSpeed);
             m_WSTess->SetAnimationPeriod(animPeriod);
             m_WSTess->SetPhillipsConst(phillipsA);
             m_WSTess->SetLambda(lambda);
             m_WSTess->SetDamping(damping);
 
             m_WSTess->Prepare();
-
-            PrepareWaterSurfaceMesh(m_WSTess->GetTileSize(),
-                                    m_WSTess->GetTileLength());
+            const uint32_t kOldSize = m_WSMesh->GetTileSize();
+            const float kOldScale = m_WSMesh->GetTileScale();
+            const bool kNeedsResize =
+                kOldSize != m_WSTess->GetTileSize() &&
+                glm::epsilonNotEqual(kOldScale, m_WSTess->GetTileLength(), 0.001f);
+            
+            if (kNeedsResize)
+            {
+                VKP_LOG_INFO("Needs resize!");
+                PrepareWaterSurfaceMesh(m_WSTess->GetTileSize(),
+                                        m_WSTess->GetTileLength());
+                const VkFormat kMapFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+                PrepareWaterSurfaceTextures(m_WSTess->GetTileSize(), kMapFormat);
+                UpdateWSMeshDescriptorSets();
+            }
         }
     }
+}
+
+void WaterSurface::ShowLightingSettings()
+{
+    // TODO zenith, azimuth
+    ImGui::DragFloat3("Sun direction",
+                      glm::value_ptr(m_WaterSurfaceUBO.sunDir), 0.1f);
+    ImGui::SliderFloat("Sun intensity", &m_WaterSurfaceUBO.sunColor.a, 0.f, 10.f);
+    ImGui::ColorEdit3("Sun color", glm::value_ptr(m_WaterSurfaceUBO.sunColor));
 }

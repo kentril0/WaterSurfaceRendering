@@ -74,7 +74,7 @@ private:
         void CreateWaterSurfaces();
 
     void UpdateCamera(vkp::Timestep dt);
-    void UpdateWaterSurfaceMesh();
+    void UpdateWaterSurfaceModel();
     void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
                                 const uint32_t frameIndex);
     void CopyToWaterSurfaceMaps(VkCommandBuffer commandBuffer);
@@ -91,6 +91,7 @@ private:
     void ShowStatusWindow() const;
     void ShowCameraSettings();
     void ShowWaterSurfaceSettings();
+    void ShowLightingSettings();
 
 private:
     std::unique_ptr<vkp::RenderPass> m_RenderPass{ nullptr };  // TODO maybe into app
@@ -144,29 +145,22 @@ private:
         alignas(16) glm::mat4 model;
         alignas(16) glm::mat4 view;
         alignas(16) glm::mat4 proj;
+        float WSHeightAmp;
     };
 
     struct WaterSurfaceUBO
     {
-        /*
-        float time;             ///< Elapsed time in seconds since the start
         glm::vec2 resolution;   ///< Viewport resolution in pixels, w x h
-        alignas(16) glm::vec3 camPosition{ 0.0, 500.0, 0.0};
+        alignas(16) glm::vec3 camPos;
         alignas(16) glm::vec3 viewMatRow0;
         alignas(16) glm::vec3 viewMatRow1;
         alignas(16) glm::vec3 viewMatRow2;
-        float camFOV          { 1.5 };   // Radians
-        float camNear         { 0.1 };
-        float camFar          { 2000. };
+        float camFOV;
+        float camNear;
+        float camFar;
         alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
         // vec4(vec3(suncolor), sunIntensity)
         alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
-        alignas(16) glm::vec3 skyColor        { 0.4, 0.75, 1.0 };
-        alignas(16) glm::vec3 skyHorizontColor{ 0.7, 0.75, 0.8 };
-        alignas(16) glm::vec3 fillLight  { 0.5, 0.8, 0.9 };
-        alignas(16) glm::vec3 bounceLight{ 0.7, 0.3, 0.2 };
-        */
-        float heightAmp{ 1.0 };  ///< Water surface height amplitude
     };
 
     VertexUBO m_VertexUBO{};
