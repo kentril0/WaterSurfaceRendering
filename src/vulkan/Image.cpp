@@ -134,7 +134,8 @@ namespace vkp
                 imageInfo.pQueueFamilyIndices = queueFamilies;
             }
 
-            imageInfo.initialLayout = m_ImageLayout;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            m_ImageLayout = imageInfo.initialLayout;
 
             VKP_ASSERT_RESULT(
                 vkCreateImage(m_Device, &imageInfo, nullptr, &m_Image));
