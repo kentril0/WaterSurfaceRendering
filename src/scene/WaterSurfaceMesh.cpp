@@ -40,15 +40,12 @@ void WaterSurfaceMesh::CreateBuffers(const vkp::Device& device)
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 }
 
-void WaterSurfaceMesh::PrepareVerticesIndices(
+void WaterSurfaceMesh::GenerateGrid(
     uint32_t size,
     float scale,
     vkp::Buffer& stagingBuffer,
     VkCommandBuffer cmdBuffer)
 {
-    if (size == m_Size)
-        return;
-
     m_Size = glm::clamp(size, s_kMinSize, s_kMaxSize);
     m_Scale = glm::max(0.001f, scale);
 
@@ -63,22 +60,28 @@ void WaterSurfaceMesh::InitVertices()
 {
     VKP_REGISTER_FUNCTION();
 
-    m_Vertices.resize( GetVertexCount() );
+    const int32_t kSize = m_Size;
+    const int32_t kHalfSize = kSize / 2;
 
-    const uint32_t kSize = m_Size;
-    const uint32_t kSize1 = kSize + 1;
-    // TODO benchmark
-    // const float kScaleDivSize = m_Scale / m_Size;
-    // const float kHalfSize = m_Size / 2.0f;
-    for (uint32_t y = 0; y < kSize1; ++y)
+    m_Vertices.reserve( GetTotalVertexCount() );
+
+    const float kScale = m_Scale / static_cast<float>(kSize);
+    for (int32_t y = -kHalfSize; y <= kHalfSize; ++y)
     {
-        for (uint32_t x = 0; x < kSize1; ++x)
+        for (int32_t x = -kHalfSize; x <= kHalfSize; ++x)
         {
-            m_Vertices[y * kSize1 + x].pos = glm::vec4(
-                (x - kSize / 2.0f) * m_Scale / kSize,
-                0.0f,   // Must be zero
-                (y - kSize / 2.0f) * m_Scale / kSize,
-                0.0f
+            m_Vertices.emplace_back(
+                // Position
+                glm::vec3(
+                    static_cast<float>(x),
+                    0.0f,
+                    static_cast<float>(y)
+                ) * kScale,
+                // Texcoords
+                glm::vec2(
+                    static_cast<float>(x + kHalfSize),
+                    static_cast<float>(y + kHalfSize)
+                ) / static_cast<float>(kSize)
             );
         }
     }
@@ -88,31 +91,29 @@ void WaterSurfaceMesh::InitIndices()
 {
     VKP_REGISTER_FUNCTION();
 
-    m_Indices.resize( GetTotalIndexCount() );
+    m_Indices.reserve( GetTotalIndexCount() );
 
     // TODO benchmark with member and local
     const uint32_t kSize = m_Size;
-    const uint32_t kSize1 = kSize+1;
+    const uint32_t kVertexCount = kSize+1;
 
-    uint32_t index = 0;
     for (uint32_t y = 0; y < kSize; ++y)
     {
         for (uint32_t x = 0; x < kSize; ++x)
         {
-            const uint32_t kVertexIndex = y * kSize1 + x;
-            
+            const uint32_t kVertexIndex = y * kVertexCount + x;
+
             // Top triangle
-            m_Indices[index++] = kVertexIndex;
-            m_Indices[index++] = kVertexIndex + kSize1 + 1;
-            m_Indices[index++] = kVertexIndex + 1;
+            m_Indices.emplace_back(kVertexIndex);
+            m_Indices.emplace_back(kVertexIndex + kVertexCount);
+            m_Indices.emplace_back(kVertexIndex + 1);
+
             // Bottom triangle
-            m_Indices[index++] = kVertexIndex;
-            m_Indices[index++] = kVertexIndex + kSize1;
-            m_Indices[index++] = kVertexIndex + kSize1 + 1;
+            m_Indices.emplace_back(kVertexIndex + 1);
+            m_Indices.emplace_back(kVertexIndex + kVertexCount);
+            m_Indices.emplace_back(kVertexIndex + kVertexCount + 1);
         }
     }
-
-    m_IndicesCount = index;
 }
 
 void WaterSurfaceMesh::StageCopyVerticesToVertexBuffer(
@@ -140,10 +141,10 @@ void WaterSurfaceMesh::StageCopyIndicesToIndexBuffer(
     vkp::Buffer& stagingBuffer, VkCommandBuffer cmdBuffer)
 {
     VKP_REGISTER_FUNCTION();
-    VKP_ASSERT(m_IndicesCount > 0);
+    VKP_ASSERT(GetIndexCount() > 0);
 
     const VkDeviceSize kVerticesSize = sizeof(Vertex) * GetVertexCount();
-    const VkDeviceSize kIndicesSize = sizeof(uint32_t) * m_IndicesCount;
+    const VkDeviceSize kIndicesSize = sizeof(uint32_t) * GetIndexCount();
 
     void* dataAddr = stagingBuffer.GetMappedAddress();
     stagingBuffer.CopyToMapped(
@@ -165,7 +166,7 @@ void WaterSurfaceMesh::StageCopyIndicesToIndexBuffer(
 void WaterSurfaceMesh::Render(VkCommandBuffer cmdBuffer)
 {
     BindBuffers(cmdBuffer);
-    DrawIndexed(cmdBuffer, m_IndicesCount);
+    DrawIndexed(cmdBuffer, GetIndexCount());
 }
 
 void WaterSurfaceMesh::BindBuffers(VkCommandBuffer cmdBuffer) const

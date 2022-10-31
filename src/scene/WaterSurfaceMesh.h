@@ -43,10 +43,10 @@ public:
      *  to transfer indices to index buffer 
      * @param cmdBuffer Command buffer in recording state to record copy cmd to
      */
-    void PrepareVerticesIndices(uint32_t size,
-                                float scale,
-                                vkp::Buffer& stagingBuffer,
-                                VkCommandBuffer cmdBuffer);
+    void GenerateGrid(uint32_t size,
+                      float scale,
+                      vkp::Buffer& stagingBuffer,
+                      VkCommandBuffer cmdBuffer);
 
     void Render(VkCommandBuffer cmdBuffer);
 
@@ -61,19 +61,24 @@ public:
     static uint32_t GetMaxVertexCount() { return (s_kMaxSize+1) * (s_kMaxSize+1); }
     static uint32_t GetMaxIndexCount()
     {
-        const uint32_t kTrianglesPerQuad = 2, kIndicesPerTriangle = 3;
-        return s_kMaxSize*s_kMaxSize * kTrianglesPerQuad * kIndicesPerTriangle;
+        const uint32_t kIndicesPerTriangle = 3, kTrianglesPerQuad = 2;
+        return GetMaxVertexCount() * kIndicesPerTriangle * kTrianglesPerQuad;
     }
 
     //                                  m_Size*(m_Size+2)+1
-    uint32_t GetVertexCount() const { return (m_Size+1) * (m_Size+1); }
+    uint32_t GetTotalVertexCount() const { return (m_Size+1) * (m_Size+1); }
 
     uint32_t GetTotalIndexCount() const
     {
-        const uint32_t kTrianglesPerQuad = 2, kIndicesPerTriangle = 3;
-        return m_Size * m_Size * kTrianglesPerQuad * kIndicesPerTriangle;
+        const uint32_t kIndicesPerTriangle = 3, kTrianglesPerQuad = 2;
+        return GetTotalVertexCount() * kIndicesPerTriangle * kTrianglesPerQuad;
     }
-    uint32_t GetCurrentIndexCount() const { return m_IndicesCount; }
+
+    uint32_t GetIndexCount() const { return m_Indices.size(); }
+    uint32_t GetVertexCount() const { return m_Vertices.size(); }
+
+    uint32_t GetTileSize() const { return m_Size; }
+    float GetTileScale() const { return m_Scale; }
 
 private:
 
@@ -95,11 +100,11 @@ private:
     uint32_t m_Size{ 0 };
     float m_Scale{ 0.0 };
 
-    uint32_t m_IndicesCount{ 0 };       ///< Real number of indices used
-
     std::vector<Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;
 
+    // On device buffers
+    //  get updated only on regeneration
     std::unique_ptr<vkp::Buffer> m_VertexBuffer;
     std::unique_ptr<vkp::Buffer> m_IndexBuffer;
 };
@@ -107,6 +112,10 @@ private:
 struct WaterSurfaceMesh::Vertex
 {
     glm::vec3 pos;
+    glm::vec2 uv;
+
+    Vertex(const glm::vec3& position, const glm::vec2& texCoord)
+        : pos(position), uv(texCoord) {}
 
     constexpr static VkVertexInputBindingDescription GetBindingDescription()
     {
@@ -126,6 +135,12 @@ struct WaterSurfaceMesh::Vertex
                 .binding = 0,
                 .format = VK_FORMAT_R32G32B32_SFLOAT,
                 .offset = offsetof(Vertex, pos)
+            },
+            {
+                .location = 1,
+                .binding = 0,
+                .format = VK_FORMAT_R32G32_SFLOAT,
+                .offset = offsetof(Vertex, uv)
             }
         };
     }
