@@ -16,7 +16,6 @@
 
 #include <fftw3.h>
 
-
 /**
  * @brief Generates data used for rendering the water surface
  *  - displacements
@@ -38,10 +37,10 @@ public:
     static constexpr float        s_kDefaultTileLength{ 1000.0f };
 
     static inline const glm::vec2 s_kDefaultWindDir{ 1.0f, 1.0f };
-    static constexpr float        s_kDefaultWindSpeed{ 20.0f };
+    static constexpr float        s_kDefaultWindSpeed{ 30.0f };
     static constexpr float        s_kDefaultAnimPeriod{ 200.0f };
-    static constexpr float        s_kDefaultPhillipsConst  { 3e-7f };
-    static constexpr float        s_kDefaultPhillipsDamping{ 0.001f };
+    static constexpr float        s_kDefaultPhillipsConst{ 3e-7f };
+    static constexpr float        s_kDefaultPhillipsDamping{ 0.1f };
 
     // Both vec4 due to GPU memory alignment requirements
     using Displacement = glm::vec4;
@@ -58,7 +57,6 @@ public:
      */
     WSTessendorf(uint32_t tileSize = WSTessendorf::s_kDefaultTileSize,
                  float tileLength  = WSTessendorf::s_kDefaultTileLength);
-
     ~WSTessendorf();
 
     /**
@@ -129,7 +127,12 @@ private:
     {
         glm::vec2 vec;
         glm::vec2 unit;
-        WaveVector(const glm::vec2& v) : vec(v), unit(glm::normalize(v)) {}
+        WaveVector(const glm::vec2& v)
+            : vec(v)
+        {
+            const float k = glm::length(v);
+            unit = k < 0.00001f ? glm::vec2(0) : glm::normalize(v);
+        }
     };
 
     struct BaseWaveHeight
@@ -166,8 +169,9 @@ private:
     float m_Damping;
 
     float m_AnimationPeriod;
+    float m_BaseFreq{ 1.0f };
 
-    float m_Lambda{ -1.0f };  ///< Displacement vector importance
+    float m_Lambda{ -1.0f };  ///< Importance of displacement vector
 
     // -------------------------------------------------------------------------
     // Data
@@ -185,26 +189,20 @@ private:
     // Base wave height field generated from the spectrum for each wave vector
     std::vector<BaseWaveHeight> m_BaseWaveHeights;
 
-    // Precomputed values of dispersion relation
-    float m_BaseFreq{ 1.0f };
-    std::vector<float> m_Dispersion;
-
     // ---------------------------------------------------------------------
     // FT computation using FFTW
 
-    Complex* m_h_FT{ nullptr };          ///< FT wave height
-    Complex* m_h_FT_slopeX{ nullptr };
-    Complex* m_h_FT_slopeZ{ nullptr };
-#ifdef CHOPPY_WAVES
-    Complex* m_h_FT_D{ nullptr };  ///< Displacement vectors
-#endif
+    Complex* m_Height{ nullptr };
+    Complex* m_SlopeX{ nullptr };
+    Complex* m_SlopeZ{ nullptr };
+    Complex* m_DisplacementX{ nullptr };
+    Complex* m_DisplacementZ{ nullptr };
 
     fftwf_plan m_PlanHeight{ nullptr };
     fftwf_plan m_PlanSlopeX{ nullptr };
     fftwf_plan m_PlanSlopeZ{ nullptr };
-#ifdef CHOPPY_WAVES
-    fftwf_plan m_PlanDispl{ nullptr };
-#endif
+    fftwf_plan m_PlanDisplacementX{ nullptr };
+    fftwf_plan m_PlanDisplacementZ{ nullptr };
 
 private:
     static constexpr float s_kG{ 9.81 };   ///< Gravitational constant
@@ -240,11 +238,9 @@ private:
         const float L = m_WindSpeed * m_WindSpeed / s_kG;
         const float L2 = L * L;
 
-        const float l2 = L2 * m_Damping * m_Damping;
-
-        return m_A * exp(-1.0f / (k2 * L2)) / k4
+        return m_A * glm::exp(-1.0f / (k2 * L2)) / k4
                    * cosFact
-                   * exp(-k2 * l2);
+                   * glm::exp(-k2 * m_Damping * m_Damping);
     }
 
     static Complex WaveHeightFT(const BaseWaveHeight& waveHeight, const float t)
