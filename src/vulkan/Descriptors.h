@@ -105,7 +105,7 @@ namespace vkp
         class Builder
         {
         public:
-            Builder(Device& device) : m_Device(device) {}
+            Builder(const Device& device) : m_Device(device) {}
 
             Builder& AddBinding(DescriptorSetLayoutBinding binding);
 
@@ -116,13 +116,13 @@ namespace vkp
             std::unique_ptr<DescriptorSetLayout> Build() const;
 
         private:
-            Device& m_Device;
+            const Device& m_Device;
 
             BindingMap m_Bindings{};
         };
 
         /// 
-        DescriptorSetLayout(Device& device, 
+        DescriptorSetLayout(const Device& device, 
                             BindingMap bindings);
         ~DescriptorSetLayout();
 
@@ -140,7 +140,7 @@ namespace vkp
     private:
         friend class DescriptorWriter;
 
-        Device& m_Device;
+        const Device& m_Device;
 
         VkDescriptorSetLayout m_Layout{ VK_NULL_HANDLE };
         BindingMap m_Bindings{};
@@ -230,8 +230,8 @@ namespace vkp
          * @param layout Layout for the descriptor sets to be written to
          * @param pool Descriptor pool for the descriptor sets to allocate from
          */
-        DescriptorWriter(DescriptorSetLayout& layout,
-                         DescriptorPool&      pool);
+        DescriptorWriter(const DescriptorSetLayout& layout,
+                         const DescriptorPool&      pool);
 
         /**
          * @brief Add VkDescriptorBufferInfo to descriptor set writes
@@ -282,8 +282,8 @@ namespace vkp
         VkResult BuildSet(VkDescriptorSet& dstSet);
         
     private:
-        DescriptorSetLayout& m_Layout;
-        DescriptorPool&      m_Pool;
+        const DescriptorSetLayout& m_Layout;
+        const DescriptorPool&      m_Pool;
 
         std::vector<VkWriteDescriptorSet> m_Writes{};
     };
