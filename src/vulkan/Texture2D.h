@@ -109,7 +109,9 @@ namespace vkp
                             bool genMips = true,
                             VkPipelineStageFlags dstStage = 
                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                            uint32_t bufferOffset = 0);
+                            uint32_t bufferOffset = 0,
+                            VkAccessFlags dstAccessMask =
+                                VK_ACCESS_SHADER_READ_BIT);
 
         /**
          * @brief Creates a 2D RGBA texture with pixels loaded from a file, 

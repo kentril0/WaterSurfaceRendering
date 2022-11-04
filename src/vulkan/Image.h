@@ -87,7 +87,8 @@ namespace vkp
          */
         void TransitionLayout_DST_OPTIMALtoSHADER_READ(
             VkCommandBuffer cmdBuffer,
-            VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VkAccessFlags dstAccessMask = VK_ACCESS_SHADER_READ_BIT);
 
         /**
          * @brief *PRECOPY* Prepares the image layout for transfer

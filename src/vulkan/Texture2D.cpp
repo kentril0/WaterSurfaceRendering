@@ -175,7 +175,8 @@ namespace vkp
     void Texture2D::CopyFromBuffer(VkCommandBuffer cmdBuffer,
                                    VkBuffer buffer, bool genMips,
                                    VkPipelineStageFlags dstStage,
-                                   uint32_t bufferOffset)
+                                   uint32_t bufferOffset,
+                                   VkAccessFlags dstAccessMask)
     {
         m_Image.TransitionLayoutToDST_OPTIMAL(cmdBuffer, dstStage);
 
@@ -183,12 +184,13 @@ namespace vkp
 
         if (genMips && m_MipLevels > 1)
         {
-            GenerateMipmaps(cmdBuffer, dstStage);
+            GenerateMipmaps(cmdBuffer, dstStage); /// TODO dstAccessMask);
         }
         else
         {
             m_Image.TransitionLayout_DST_OPTIMALtoSHADER_READ(cmdBuffer,
-                                                              dstStage);
+                                                              dstStage,
+                                                              dstAccessMask);
         }
     }
 
