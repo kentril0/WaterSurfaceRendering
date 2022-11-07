@@ -1,4 +1,3 @@
-
 /**
  *  Copyright (c) 2022 WaterSurfaceRendering authors Distributed under MIT License
  * (http://opensource.org/licenses/MIT)
@@ -11,20 +10,36 @@
 #include <memory>
 
 #include "vulkan/Device.h"
+#include "vulkan/Descriptors.h"
+#include "vulkan/ShaderModule.h"
 #include "vulkan/Buffer.h"
+#include "vulkan/Pipeline.h"
+#include "vulkan/Texture2D.h"
+
+#include "scene/Mesh.h"
+#include "scene/WSTessendorf.h"
+
+#include "Gui.h"
 
 
 /**
- * @brief Water surface mesh represents a grid or a tile of a certain tile,
- *  made of vertices of type "WaterSurfaceMesh::Vertex".
+ * @brief Enable for double buffered textures: two sets of textures, one used for
+ *  copying to, the other for rendering to, at each frame they are swapped.
+ * For the current use-case, the performance might be slightly worse.
+ */
+//#define DOUBLE_BUFFERED
+
+/**
+ * @brief Represents a water surface rendered as a mesh.
+ *
  */
 class WaterSurfaceMesh
 {
 public:
     struct Vertex;
 
-    static const uint32_t s_kMinSize{ 4 };
-    static const uint32_t s_kMaxSize{ 1024 };
+    static const uint32_t s_kMinTileSize{ 16 };
+    static const uint32_t s_kMaxTileSize{ 1024 };
 
 public:
     /**
@@ -32,81 +47,226 @@ public:
      *  vertices and indices.
      *  To render the mesh, fnc "Prepare()" must be called with the size of tile
     */
-    WaterSurfaceMesh(const vkp::Device& device);
+    WaterSurfaceMesh(const vkp::Device& device,
+                     const vkp::DescriptorPool& descriptorPool);
     ~WaterSurfaceMesh();
 
-    /**
-     * @brief Generates vertices and indices of a tile of a certain size
-     * @param size Size of a tile, must be in range [s_kMinSize, s_kMaxSize]
-     * @param scale Tile scale or length, must be positive
-     * @param stagingBuffer Reference to a new buffer object, will be used
-     *  to transfer indices to index buffer 
-     * @param cmdBuffer Command buffer in recording state to record copy cmd to
-     */
-    void GenerateGrid(uint32_t size,
-                      float scale,
-                      vkp::Buffer& stagingBuffer,
-                      VkCommandBuffer cmdBuffer);
+    void CreateRenderData(
+        VkRenderPass renderPass,
+        const uint32_t kImageCount,
+        const VkExtent2D kFramebufferExtent,
+        const bool kFramebufferHasDepthAttachment
+    );
 
-    void Render(VkCommandBuffer cmdBuffer);
+    void Prepare(VkCommandBuffer cmdBuffer);
 
-    const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
-    std::vector<Vertex>& GetVertices() { return m_Vertices; }
+    void Update(float dt);
 
-    /** @brief Copies current vertices to vertex buffer and flushes
-     *  Use to see changes after modification of vertices.
-     */
-    //void UpdateVertexBuffer();
+    void PrepareRender(
+        const uint32_t frameIndex,
+        VkCommandBuffer cmdBuffer,
+        const glm::mat4& viewMat,
+        const glm::mat4& projMat,
+        const glm::vec3& camPos
+    );
+ 
+    void Render(
+        const uint32_t frameIndex,
+        VkCommandBuffer cmdBuffer
+    );
 
-    static uint32_t GetMaxVertexCount() { return (s_kMaxSize+1) * (s_kMaxSize+1); }
+    // @pre Called inside ImGui Window scope
+    void ShowGUISettings();
+
+private:
+    // TODO batch 
+
+    void PrepareMesh(VkCommandBuffer cmdBuffer);
+    void GenerateMeshVerticesIndices();
+    void UpdateMeshBuffers(VkCommandBuffer cmdBuffer);
+
+    void PrepareModelTess(VkCommandBuffer cmdBuffer);
+
+    void ShowWaterSurfaceSettings();
+    void ShowLightingSettings();
+    void ShowMeshSettings();
+
+    void UpdateUniformBuffer(const uint32_t imageIndex);
+    void UpdateDescriptorSets();
+    void UpdateDescriptorSet(const uint32_t frameIndex);
+    void CreateDescriptorSetLayout();
+    void CreateUniformBuffers(const uint32_t kBufferCount);
+    void SetupPipeline();
+    void CreateDescriptorSets(const uint32_t kCount);
+
+    std::vector<
+        std::shared_ptr<vkp::ShaderModule>
+    > CreateShadersFromShaderInfos(const vkp::ShaderInfo* kShaderInfos,
+                                   const uint32_t kShaderInfoCount) const;
+    void CreatePipeline(
+        const VkExtent2D& framebufferExtent,
+        VkRenderPass renderPass,
+        bool framebufferHasDepthAttachment);
+
+    void CreateTessendorfModel();
+
+    void CreateMesh();
+    std::vector<Vertex> CreateGridVertices(const uint32_t kTileSize,
+                                           const float kScale);
+    std::vector<uint32_t> CreateGridIndices(const uint32_t kTileSize);
+
+    void CreateStagingBuffer();
+    void CreateFrameMaps(VkCommandBuffer cmdBuffer);
+    std::unique_ptr<vkp::Texture2D> CreateMap(
+        VkCommandBuffer cmdBuffer,
+        const uint32_t kSize,
+        const VkFormat kMapFormat,
+        const bool kUseMipMapping);
+
+    struct FrameMapData
+    {
+        std::unique_ptr<vkp::Texture2D> displacementMap{ nullptr };
+        std::unique_ptr<vkp::Texture2D> normalMap{ nullptr };
+    };
+
+    void UpdateFrameMaps(
+        VkCommandBuffer cmdBuffer,
+        FrameMapData& frame);
+    void CopyModelTessDataToStagingBuffer();
+
+    uint32_t GetTotalVertexCount(const uint32_t kTileSize) const {
+        return (kTileSize+1) * (kTileSize+1);
+    }
+
+    uint32_t GetTotalIndexCount(const uint32_t kTotalVertexCount) const
+    {
+        const uint32_t kIndicesPerTriangle = 3, kTrianglesPerQuad = 2;
+        return kTotalVertexCount * kIndicesPerTriangle * kTrianglesPerQuad;
+    }
+
+    static uint32_t GetMaxVertexCount() {
+        return (s_kMaxTileSize+1) * (s_kMaxTileSize+1);
+    }
     static uint32_t GetMaxIndexCount()
     {
         const uint32_t kIndicesPerTriangle = 3, kTrianglesPerQuad = 2;
         return GetMaxVertexCount() * kIndicesPerTriangle * kTrianglesPerQuad;
     }
 
-    //                                  m_Size*(m_Size+2)+1
-    uint32_t GetTotalVertexCount() const { return (m_Size+1) * (m_Size+1); }
+private:
 
-    uint32_t GetTotalIndexCount() const
+    // =========================================================================
+    // Vulkan
+
+    const vkp::Device& m_Device;
+
+    // TODO static GetDescriptorPoolSizes
+    const vkp::DescriptorPool& m_DescriptorPool;
+
+    static const inline std::array<vkp::ShaderInfo, 2> s_kShaderInfos {
+        vkp::ShaderInfo{
+            .paths = { "shaders/WaterSurfaceMesh.vert" },
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .isSPV = false
+        },
+        vkp::ShaderInfo{
+            .paths = { "shaders/WaterSurfaceMesh.frag" },
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .isSPV = false
+        }
+    };
+
+    std::unique_ptr<vkp::DescriptorSetLayout> m_DescriptorSetLayout{ nullptr };
+    std::vector<VkDescriptorSet>              m_DescriptorSets;
+
+    // Uniform buffer for each swap chain image
+    //   Cleanup after fininshed rendering or on swap chain recreation
+    std::vector<vkp::Buffer> m_UniformBuffers;
+
+    std::unique_ptr<vkp::Pipeline> m_Pipeline{ nullptr };
+
+    // =========================================================================
+
+    // Mesh properties
+    std::unique_ptr< Mesh<Vertex> > m_Mesh{ nullptr };
+
+    uint32_t m_TileSize  { WSTessendorf::s_kDefaultTileSize };
+    float m_VertexDistance{ WSTessendorf::s_kDefaultTileLength /
+                            static_cast<float>(WSTessendorf::s_kDefaultTileSize) };
+    // Model properties
+    std::unique_ptr<WSTessendorf> m_ModelTess{ nullptr };
+
+    bool m_PlayAnimation{ true };
+    float m_TimeCtr  { 0.0 };
+    float m_AnimSpeed{ 1.0 };
+
+    // -------------------------------------------------------------------------
+    // Water Surface textures
+    //  both displacementMap and normalMap are generated on the CPU, then 
+    //  transferred to the GPU, per frame
+
+    static constexpr VkFormat s_kMapFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+    static constexpr bool s_kUseMipMapping = false;
+
+    std::unique_ptr<vkp::Buffer> m_StagingBuffer{ nullptr };
+
+    struct FrameMapPair
     {
-        const uint32_t kIndicesPerTriangle = 3, kTrianglesPerQuad = 2;
-        return GetTotalVertexCount() * kIndicesPerTriangle * kTrianglesPerQuad;
-    }
+    #ifndef DOUBLE_BUFFERED
+        std::array<FrameMapData, 1> data;
+    #else
+        std::array<FrameMapData, 2> data;
+    #endif
+    };
 
-    uint32_t GetIndexCount() const { return m_Indices.size(); }
-    uint32_t GetVertexCount() const { return m_Vertices.size(); }
+    // Map pair is preallocated for each size of the model's data
+    std::vector<FrameMapPair> m_FrameMaps;
+    // Bound pair for the current model's size
+    FrameMapPair* m_CurFrameMap{ nullptr };
 
-    uint32_t GetTileSize() const { return m_Size; }
-    float GetTileScale() const { return m_Scale; }
+    uint32_t m_FrameMapIndex{ 0 };      ///< Swap index
 
-private:
+    // -------------------------------------------------------------------------
+    // Uniform buffers data
 
-    void CreateBuffers(const vkp::Device& device);
+    struct VertexUBO
+    {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 proj;
+        float WSHeightAmp;
+    };
 
-    void InitVertices();
-    void InitIndices();
+    struct WaterSurfaceUBO
+    {
+        glm::vec2 resolution;   ///< Viewport resolution in pixels, w x h
+        alignas(16) glm::vec3 camPos;
+        alignas(16) glm::vec3 viewMatRow0;
+        alignas(16) glm::vec3 viewMatRow1;
+        alignas(16) glm::vec3 viewMatRow2;
+        float camFOV;
+        float camNear;
+        float camFar;
+        alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
+        // vec4(vec3(suncolor), sunIntensity)
+        alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
+        float terrainDepth{ -100.0};
+        float skyIntensity{ 1.0 };
+        float specularIntensity{ 0.6 };
+        float specularHighlights{ 32.0 };
+    };
 
-    void StageCopyVerticesToVertexBuffer(vkp::Buffer& stagingBuffer,
-                                         VkCommandBuffer cmdBuffer);
-    void StageCopyIndicesToIndexBuffer(vkp::Buffer& stagingBuffer,
-                                       VkCommandBuffer cmdBuffer);
+    VertexUBO m_VertexUBO{};
+    WaterSurfaceUBO m_WaterSurfaceUBO{};
 
-    void BindBuffers(VkCommandBuffer cmdBuffer) const;
-    void DrawIndexed(VkCommandBuffer cmdBuffer,
-                     const uint32_t kIndexCount) const;
+    // -------------------------------------------------------------------------
+    // GUI stuff
 
-private:
-    uint32_t m_Size{ 0 };
-    float m_Scale{ 0.0 };
-
-    std::vector<Vertex> m_Vertices;
-    std::vector<uint32_t> m_Indices;
-
-    // On device buffers
-    //  get updated only on regeneration
-    std::unique_ptr<vkp::Buffer> m_VertexBuffer;
-    std::unique_ptr<vkp::Buffer> m_IndexBuffer;
+    // Should correspond to s_kMaxTileSize and s_kMinTileSize range
+    static constexpr gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{
+        { 16, 32, 64, 128, 256, 512, 1024 },
+        { "16", "32", "64", "128", "256", "512", "1024" }
+    };
 };
 
 struct WaterSurfaceMesh::Vertex
