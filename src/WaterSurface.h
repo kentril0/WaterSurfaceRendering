@@ -14,9 +14,8 @@
 #include "vulkan/Pipeline.h"
 #include "vulkan/Texture2D.h"
 
-#include "scene/WSTessendorf.h"
-#include "scene/WaterSurfaceMesh.h"
 #include "scene/Camera.h"
+#include "scene/WaterSurfaceMesh.h"
 
 
 class WaterSurface : public vkp::Application
@@ -54,47 +53,23 @@ private:
     void CreateDrawCommandBuffers();
     void DestroyDrawCommandPools();
 
-    void CreateUniformBuffers(const uint32_t kBufferCount);
-    void UpdateUniformBuffer(const uint32_t imageIndex);
-
     void CreateDescriptorPool();
-
-    void SetupWaterSurfaceMeshRendering();
-        void CreateWSMeshDescriptorSetLayout();
-        void SetupWSMeshPipeline();
-        void CreateWSMeshPipeline();
-        void CreateWSMeshDescriptorSets(const uint32_t kCount);
-        // Once, and later only when dirty
-        void UpdateWSMeshDescriptorSets();
-        void UpdateWSMeshDescriptorSet(const uint32_t frameIndex);
 
     void SetupAssets();
         void SetupGUI();
         void CreateCamera();
-        void CreateWaterSurfaces();
+        void CreateWaterSurfaceMesh();
 
     void UpdateCamera(vkp::Timestep dt);
-    void UpdateWaterSurfaceModel();
-    void RenderWaterSurfaceMesh(VkCommandBuffer cmdBuffer,
-                                const uint32_t frameIndex);
-    void CopyToWaterSurfaceMaps(VkCommandBuffer commandBuffer);
-
-    // On properties change:
-
-    void PrepareWaterSurfaceMesh(uint32_t size, float scale);
-    void PrepareWaterSurfaceTextures(uint32_t size,
-                                     const VkFormat kMapFormat);
 
     // GUI:
-
     void UpdateGui();
     void ShowStatusWindow() const;
     void ShowCameraSettings();
-    void ShowWaterSurfaceSettings();
-    void ShowLightingSettings();
 
 private:
-    std::unique_ptr<vkp::RenderPass> m_RenderPass{ nullptr };  // TODO maybe into app
+    // TODO maybe into app
+    std::unique_ptr<vkp::RenderPass> m_RenderPass{ nullptr };
 
     // TODO maybe into App
     std::array<VkClearValue, 2> m_ClearValues{
@@ -105,14 +80,7 @@ private:
     // TODO maybe into app
     std::vector<vkp::CommandPool> m_DrawCmdPools;
 
-    // -------------------------------------------------------------------------
-    // Resource Descriptors
-
     std::unique_ptr<vkp::DescriptorPool> m_DescriptorPool{ nullptr };
-
-    // Uniform buffer for each swap chain image
-    //   Cleanup after fininshed rendering or on swap chain recreation
-    std::vector<vkp::Buffer> m_UniformBuffers;
 
     // =========================================================================
 
@@ -132,92 +100,14 @@ private:
         KeyHideGui = GLFW_KEY_ESCAPE,
     };
 
+    // -------------------------------------------------------------------------
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
-    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 12.f, -14.f };
+    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 340.f, -420.f };
 
-    // -------------------------------------------------------------------------
     // Water Surfaces
-
-    struct VertexUBO
-    {
-        alignas(16) glm::mat4 model;
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 proj;
-        float WSHeightAmp;
-    };
-
-    struct WaterSurfaceUBO
-    {
-        glm::vec2 resolution;   ///< Viewport resolution in pixels, w x h
-        alignas(16) glm::vec3 camPos;
-        alignas(16) glm::vec3 viewMatRow0;
-        alignas(16) glm::vec3 viewMatRow1;
-        alignas(16) glm::vec3 viewMatRow2;
-        float camFOV;
-        float camNear;
-        float camFar;
-        alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
-        // vec4(vec3(suncolor), sunIntensity)
-        alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
-    };
-
-    VertexUBO m_VertexUBO{};
-    WaterSurfaceUBO m_WaterSurfaceUBO{};
-
-    std::unique_ptr<vkp::DescriptorSetLayout> m_WSMeshDescriptorSetLayout{ nullptr };
-    std::vector<VkDescriptorSet> m_WSMeshDescriptorSets;
-
-    std::unique_ptr<WSTessendorf> m_WSTess{ nullptr };
-    std::unique_ptr<WaterSurfaceMesh> m_WSMesh{ nullptr };
-
-    // -------------------------------------------------------------------------
-    // Water Surface textures
-    //  both heightmap and normalmap are generated on the CPU, then 
-    //  transferred to the GPU, per frame
-
-    std::unique_ptr<vkp::Buffer> m_StagingBuffer{ nullptr };
-
-    std::unique_ptr<vkp::Texture2D> m_DisplacementMap{ nullptr };
-    std::unique_ptr<vkp::Texture2D> m_NormalMap{ nullptr };
-
-    // -------------------------------------------------------------------------
-    // Rendering water surface as a mesh
-
-    static const inline std::array<vkp::ShaderInfo, 2> s_kWSMeshShaderInfos {
-        vkp::ShaderInfo{
-            .paths = { "shaders/WaterSurfaceMesh.vert" },
-            .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .isSPV = false
-        },
-        vkp::ShaderInfo{
-            .paths = { "shaders/WaterSurfaceMesh.frag" },
-            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .isSPV = false
-        }
-    };
-
-    std::unique_ptr<vkp::Pipeline> m_WSMeshPipeline{ nullptr };
-
-    // -------------------------------------------------------------------------
-    // GUI stuff
-
-    template<typename T, size_t S>
-    struct ValueStringArray
-    {
-        const T types[S];
-        const char* strings[S];
-        constexpr T operator[](int i) const { return types[i]; }
-        constexpr operator auto() const { return strings; }
-        constexpr uint32_t size() const { return S; }
-    };
-
-    // Should correspond to WaterSurfaceMesh::s_kMaxSize and s_kMinSize range
-    static constexpr ValueStringArray<uint32_t, 9> s_kWSResolutions{
-        { 4, 8, 16, 32, 64, 128, 256, 512, 1024 },
-        { "4", "8", "16", "32", "64", "128", "256", "512", "1024" }
-    };
+    std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };
 
 };
 
