@@ -87,6 +87,8 @@ public:
     auto GetPhillipsConst() const { return m_A; }
     auto GetDamping() const { return m_Damping; }
     auto GetDisplacementLambda() const { return m_Lambda; }
+    float GetMinHeight() const { return m_MinHeight; }
+    float GetMaxHeight() const { return m_MaxHeight; }
 
     // Data
 
@@ -203,6 +205,9 @@ private:
     fftwf_plan m_PlanSlopeZ{ nullptr };
     fftwf_plan m_PlanDisplacementX{ nullptr };
     fftwf_plan m_PlanDisplacementZ{ nullptr };
+
+    float m_MinHeight{ -999.0 };
+    float m_MaxHeight{ 999.0 };
 
 private:
     static constexpr float s_kG{ 9.81 };   ///< Gravitational constant

@@ -30,7 +30,6 @@ WSTessendorf::~WSTessendorf()
 
 void WSTessendorf::Prepare()
 {
-    vkp::Timer timer;
     VKP_REGISTER_FUNCTION();
 
     VKP_LOG_INFO("Water surface resolution: {} x {}", m_TileSize, m_TileSize);
@@ -48,8 +47,6 @@ void WSTessendorf::Prepare()
 
     DestroyFFTW();
     SetupFFTW();
-
-    VKP_LOG_INFO("PREPARED in: {:f} ms", timer.ElapsedMicro() * 0.001);
 }
 
 std::vector<WSTessendorf::WaveVector> WSTessendorf::ComputeWaveVectors() const
@@ -247,7 +244,9 @@ float WSTessendorf::ComputeWaves(float t)
 
 float WSTessendorf::NormalizeHeights(float minHeight, float maxHeight)
 {
-    vkp::Timer timer;
+    m_MinHeight = minHeight;
+    m_MaxHeight = maxHeight;
+
     const float A = glm::max( glm::abs(minHeight), glm::abs(maxHeight) );
     const float OneOverA = 1.f / A;
 
