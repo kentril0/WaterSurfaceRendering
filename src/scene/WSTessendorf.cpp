@@ -7,143 +7,138 @@
 #include "scene/WSTessendorf.h"
 
 
-WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength,
-                           const glm::vec2& windDir, float animationPeriod,
-                           float phillipsConst)
+WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength)
 {
     VKP_REGISTER_FUNCTION();
 
     SetTileSize(tileSize);
     SetTileLength(tileLength);
-    SetWindDirection(windDir);
-    SetAnimationPeriod(animationPeriod);
-    SetPhillipsConst(phillipsConst);
 
-    Prepare();
+    SetWindDirection(s_kDefaultWindDir);
+    SetWindSpeed(s_kDefaultWindSpeed);
+    SetAnimationPeriod(s_kDefaultAnimPeriod);
+
+    SetPhillipsConst(s_kDefaultPhillipsConst);
+    SetDamping(s_kDefaultPhillipsDamping);
 }
 
 WSTessendorf::~WSTessendorf()
 {
     VKP_REGISTER_FUNCTION();
-
     DestroyFFTW();
 }
 
 void WSTessendorf::Prepare()
 {
-    // TODO timer
     VKP_REGISTER_FUNCTION();
 
     VKP_LOG_INFO("Water surface resolution: {} x {}", m_TileSize, m_TileSize);
 
-    PrecomputeBaseWaveHeightField();
-    PrecomputeWaveVectors();
+    m_WaveVectors = ComputeWaveVectors();
+    m_BaseWaveHeights = ComputeBaseWaveHeightField();
 
-    const uint32_t kTileSize1 = m_TileSize +1;
+    const uint32_t kSize = m_TileSize;
 
     const Displacement kDefaultDisplacement{ 0.0 };
-    m_Displacements.resize(kTileSize1 * kTileSize1, kDefaultDisplacement);
+    m_Displacements.resize(kSize * kSize, kDefaultDisplacement);
 
     const Normal kDefaultNormal{ 0.0, 1.0, 0.0, 0.0 };
-    m_Normals.resize(kTileSize1 * kTileSize1, kDefaultNormal);
-    
+    m_Normals.resize(kSize * kSize, kDefaultNormal);
+
     DestroyFFTW();
     SetupFFTW();
 }
 
-void WSTessendorf::PrecomputeBaseWaveHeightField()
+std::vector<WSTessendorf::WaveVector> WSTessendorf::ComputeWaveVectors() const
 {
     VKP_REGISTER_FUNCTION();
 
-    const auto kTileSize = m_TileSize;
-    const auto kTileSize1 = m_TileSize+1;
-    const auto kTileLength = m_TileLength;
+    const int32_t kSize = m_TileSize;
+    const float kLength = m_TileLength;
 
-    m_BaseWaves.resize(kTileSize1 * kTileSize1);
-
-    for (uint32_t m = 0; m < kTileSize1; ++m)
+    std::vector<WaveVector> waveVecs;
+    waveVecs.reserve(kSize * kSize);
+    
+    for (int32_t m = 0; m < kSize; ++m)
     {
-        for (uint32_t n = 0; n < kTileSize1; ++n)
+        for (int32_t n = 0; n < kSize; ++n)
         {
-            const glm::vec2 kWaveVec(
-                M_PI * (2.0f * n - kTileSize) / kTileLength,
-                M_PI * (2.0f * m - kTileSize) / kTileLength
+            waveVecs.emplace_back(
+                glm::vec2(
+                    M_PI * (2.0f * n - kSize) / kLength,
+                    M_PI * (2.0f * m - kSize) / kLength
+                )
             );
-
-            auto& baseWave = m_BaseWaves[m * kTileSize1 + n];
-            // h_0^~(k)
-            baseWave.h0_FT = BaseWaveHeightFT(kWaveVec);
-            // *h_0^~(-k)
-            baseWave.h0_FT_conj = std::conj(BaseWaveHeightFT(-kWaveVec));
         }
     }
+
+    return waveVecs;
 }
 
-void WSTessendorf::PrecomputeWaveVectors()
+std::vector<WSTessendorf::BaseWaveHeight>
+    WSTessendorf::ComputeBaseWaveHeightField() const
 {
     VKP_REGISTER_FUNCTION();
 
-    const auto kTileSize = m_TileSize;
-    const auto kTileSize1 = m_TileSize+1;
-    const auto kTileLength = m_TileLength;
+    const int32_t kSize = m_TileSize;
+    const float kLength = m_TileLength;
 
-    m_WaveVectors.resize(kTileSize * kTileSize);
-    m_UnitWaveVectors.resize(kTileSize * kTileSize, glm::vec2(0.0f));
-    m_Dispersion.resize(kTileSize * kTileSize);
+    std::vector<WSTessendorf::BaseWaveHeight> baseWaveHeights(kSize * kSize);
+    VKP_ASSERT(m_WaveVectors.size() == baseWaveHeights.size());
 
-    for (uint32_t m = 0; m < kTileSize; ++m)
+    for (int32_t m = 0; m < kSize; ++m)
     {
-        for (uint32_t n = 0; n < kTileSize; ++n)
+        for (int32_t n = 0; n < kSize; ++n)
         {
-            const uint32_t kIndex = m * kTileSize + n;
+            auto& h0 = baseWaveHeights[m * kSize + n];
 
-            const glm::vec2 kWaveVec(
-                M_PI * (2.0f * n - kTileSize) / kTileLength,
-                M_PI * (2.0f * m - kTileSize) / kTileLength
-            );
-
-            m_WaveVectors[kIndex] = kWaveVec;
-
-            const float kWaveVecLen = glm::length(kWaveVec);
-
-            if (kWaveVecLen >= 0.00001f)
-                m_UnitWaveVectors[kIndex] = kWaveVec / kWaveVecLen;
-
-            m_Dispersion[kIndex] = QDispersion(kWaveVecLen);
+            const auto& kWaveVec = m_WaveVectors[m * kSize + n].vec;
+            h0.heightAmp = BaseWaveHeightFT(kWaveVec);
+            h0.heightAmp_conj = std::conj(BaseWaveHeightFT(-kWaveVec));
+            h0.dispersion = QDispersion( glm::length(kWaveVec) );
         }
     }
+
+    return baseWaveHeights;
 }
 
 void WSTessendorf::SetupFFTW()
 {
     VKP_REGISTER_FUNCTION();
 
-    m_h_FT        = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * m_TileSize * m_TileSize);
-    m_h_FT_slopeX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * m_TileSize * m_TileSize);
-    m_h_FT_slopeZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * m_TileSize * m_TileSize);
+    const uint32_t kSize = m_TileSize;
+
+    m_Height = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
+    m_SlopeX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
+    m_SlopeZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
+    m_DisplacementX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
+    m_DisplacementZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
 
     m_PlanHeight = fftwf_plan_dft_2d(
-        m_TileSize, m_TileSize, 
-        reinterpret_cast<fftwf_complex*>(m_h_FT),
-        reinterpret_cast<fftwf_complex*>(m_h_FT),
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_Height),
+        reinterpret_cast<fftwf_complex*>(m_Height),
         FFTW_BACKWARD, FFTW_MEASURE);
     m_PlanSlopeX = fftwf_plan_dft_2d(
-        m_TileSize, m_TileSize, 
-        reinterpret_cast<fftwf_complex*>(m_h_FT_slopeX),
-        reinterpret_cast<fftwf_complex*>(m_h_FT_slopeX),
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_SlopeX),
+        reinterpret_cast<fftwf_complex*>(m_SlopeX),
         FFTW_BACKWARD, FFTW_MEASURE);
     m_PlanSlopeZ = fftwf_plan_dft_2d(
-        m_TileSize, m_TileSize, 
-        reinterpret_cast<fftwf_complex*>(m_h_FT_slopeZ),
-        reinterpret_cast<fftwf_complex*>(m_h_FT_slopeZ),
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
+        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
         FFTW_BACKWARD, FFTW_MEASURE);
-#ifdef CHOPPY_WAVES
-    m_PlanD = fftwf_plan_dft_2d(
-        m_TileSize, m_TileSize, 
-        reinterpret_cast<fftwf_complex*>(m_h_FT_D),
-        reinterpret_cast<fftwf_complex*>(m_h_FT_D),
+    m_PlanDisplacementX = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
+        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
         FFTW_BACKWARD, FFTW_MEASURE);
-#endif
+    m_PlanDisplacementZ = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
+        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
+        FFTW_BACKWARD, FFTW_MEASURE);
 }
 
 void WSTessendorf::DestroyFFTW()
@@ -157,29 +152,26 @@ void WSTessendorf::DestroyFFTW()
     m_PlanHeight = nullptr;
     fftwf_destroy_plan(m_PlanSlopeX);
     fftwf_destroy_plan(m_PlanSlopeZ);
-#ifdef CHOPPY_WAVES
-    fftwf_destroy_plan(m_PlanD);
-#endif
+    fftwf_destroy_plan(m_PlanDisplacementX);
+    fftwf_destroy_plan(m_PlanDisplacementZ);
 
-    fftwf_free((fftwf_complex*)m_h_FT);
-    fftwf_free((fftwf_complex*)m_h_FT_slopeX);
-    fftwf_free((fftwf_complex*)m_h_FT_slopeZ);
+    fftwf_free((fftwf_complex*)m_Height);
+    fftwf_free((fftwf_complex*)m_SlopeX);
+    fftwf_free((fftwf_complex*)m_SlopeZ);
+    fftwf_free((fftwf_complex*)m_DisplacementX);
+    fftwf_free((fftwf_complex*)m_DisplacementZ);
 }
 
 float WSTessendorf::ComputeWaves(float t)
 {
-    vkp::Timer timer;
-
     const auto kTileSize = m_TileSize;
     const auto kTileSize1 = m_TileSize+1;
 
     for (uint32_t m = 0; m < kTileSize; ++m)
         for (uint32_t n = 0; n < kTileSize; ++n)
         {
-            const uint32_t kIndex = m * kTileSize + n;
-
-            m_h_FT[kIndex] = WaveHeightFT(m_Dispersion[kIndex], t,
-                                          m * kTileSize1 + n);
+            m_Height[m * kTileSize + n] =
+                WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
         }
 
     {
@@ -188,34 +180,29 @@ float WSTessendorf::ComputeWaves(float t)
             for (uint32_t n = 0; n < kTileSize; ++n)
             {
                 const uint32_t kIndex = m * kTileSize + n;
-                m_h_FT_slopeX[kIndex] =
-                    Complex(0, m_WaveVectors[kIndex].x) * m_h_FT[kIndex];
-                m_h_FT_slopeZ[kIndex] =
-                    Complex(0, m_WaveVectors[kIndex].y) * m_h_FT[kIndex];
+                
+                const auto& kWaveVec = m_WaveVectors[kIndex].vec;
+                m_SlopeX[kIndex] = Complex(0, kWaveVec.x) * m_Height[kIndex];
+                m_SlopeZ[kIndex] = Complex(0, kWaveVec.y) * m_Height[kIndex];
             }
 
-    #ifdef CHOPPY_WAVES
         // Displacement vectors
         for (uint32_t m = 0; m < kTileSize; ++m)
-        {
             for (uint32_t n = 0; n < kTileSize; ++n)
             {
                 const uint32_t kIndex = m * kTileSize + n;
-                const glm::vec2& kUWaveVec = m_UnitWaveVectors[kIndex];
-
-                m_h_FT_D[kIndex] = Complex(-kUWaveVec.x * m_h_FT[kIndex].imag(),
-                                           -kUWaveVec.y * m_h_FT[kIndex].imag());
+                
+                const auto& kUnitWaveVec = m_WaveVectors[kIndex].unit;
+                m_DisplacementX[kIndex] = Complex(0, -kUnitWaveVec.x) * m_Height[kIndex];
+                m_DisplacementZ[kIndex] = Complex(0, -kUnitWaveVec.y) * m_Height[kIndex];
             }
-        }
-    #endif
     }
 
     fftwf_execute(m_PlanHeight);
     fftwf_execute(m_PlanSlopeX);
     fftwf_execute(m_PlanSlopeZ);
-#ifdef CHOPPY_WAVES
-    fftwf_execute(m_PlanD);
-#endif
+    fftwf_execute(m_PlanDisplacementX);
+    fftwf_execute(m_PlanDisplacementZ);
 
     float maxHeight = std::numeric_limits<float>::min();
     float minHeight = std::numeric_limits<float>::max();
@@ -228,95 +215,43 @@ float WSTessendorf::ComputeWaves(float t)
     {
         for (uint32_t n = 0; n < kTileSize; ++n)
         {
-            const uint32_t kIndex  = m * kTileSize + n;
-            const uint32_t kIndex1 = m * kTileSize1 + n;
+            const uint32_t kIndex = m * kTileSize + n;
             const int sign = kSigns[(n + m) & 1];
 
-            const auto& h_FT = m_h_FT[kIndex] * static_cast<float>(sign);
-            maxHeight = h_FT.real() > maxHeight ? h_FT.real() : maxHeight;
-            minHeight = h_FT.real() < minHeight ? h_FT.real() : minHeight;
+            const auto h_FT = m_Height[kIndex].real() * static_cast<float>(sign);
+            maxHeight = glm::max(h_FT, maxHeight);
+            minHeight = glm::min(h_FT, minHeight);
+        
+            auto& displacement = m_Displacements[kIndex];
+            displacement.y = h_FT;
+            displacement.x =
+                static_cast<float>(sign) * m_Lambda * m_DisplacementX[kIndex].real();
+            displacement.z =
+                static_cast<float>(sign) * m_Lambda * m_DisplacementZ[kIndex].real();
 
-        #ifdef CHOPPY_WAVES
-            // Horizontal displacement, height
-            auto D_x = Complex(m_h_FT_D[kIndex].real(), 0.0);
-            D_x *= static_cast<float>(sign);
-
-            auto D_z = Complex(m_h_FT_D[kIndex].imag(), 0.0);
-            D_z *= static_cast<float>(sign);
-
-            m_Displacements[kIndex1] = glm::vec4(m_Lambda * D_x.real(),
-                                                 h_FT.real(),
-                                                 m_Lambda * D_z.real(),
-                                                 0.0);
-        #else
-            m_Displacements[kIndex1].y = h_FT.real();
-        #endif
+            m_Normals[kIndex] = glm::vec4(glm::normalize(glm::vec3(
+                -( sign * m_SlopeX[kIndex].real() ),
+                1.0f,
+                -( sign * m_SlopeZ[kIndex].real() )
+            )
+            ),
+            0.0f);
         }
     }
 
-    for (uint32_t m = 0; m < kTileSize; ++m)
-    {
-        for (uint32_t n = 0; n < kTileSize; ++n)
-        {
-            const uint32_t kIndex  = m * kTileSize + n;
-            const uint32_t kIndex1 = m * kTileSize1 + n;
-            const int sign = kSigns[(n + m) & 1];
-
-            // Estimate normal from slope
-            m_Normals[kIndex1] = glm::vec4(
-                glm::normalize(
-                    glm::vec3(
-                        -(m_h_FT_slopeX[kIndex] * static_cast<float>(sign)).real(),
-                        1.0f,
-                        -(m_h_FT_slopeZ[kIndex] * static_cast<float>(sign)).real()
-                    )
-                ),
-                0.0f
-            );
-        }
-    }
-
-    // Seamless tiling
-    {
-        const uint32_t kIndex1 = 0 * kTileSize1 + 0;
-
-        m_Displacements[kIndex1 + kTileSize + kTileSize1 * kTileSize] = m_Displacements[kIndex1];
-        m_Normals[kIndex1 + kTileSize + kTileSize1 * kTileSize] = m_Normals[kIndex1];
-
-        m_Displacements[kIndex1 + kTileSize] = m_Displacements[kIndex1];
-        m_Normals[kIndex1 + kTileSize] = m_Normals[kIndex1];
-    }
-
-    {
-        for (uint32_t n = 1; n < kTileSize; ++n)
-        {
-            const uint32_t kIndex1 = 0 * kTileSize1 + n;
-
-            m_Displacements[kIndex1 + kTileSize1 * kTileSize] = m_Displacements[kIndex1];
-            m_Normals[kIndex1 + kTileSize1 * kTileSize] = m_Normals[kIndex1];
-        }
-
-        for (uint32_t m = 1; m < kTileSize; ++m)
-        {
-            const uint32_t kIndex1 = m * kTileSize1 + 0;
-            m_Displacements[kIndex1 + kTileSize] = m_Displacements[kIndex1];
-            m_Normals[kIndex1 + kTileSize] = m_Normals[kIndex1];
-        }
-    }
-
-    VKP_LOG_INFO("COMPUTE_WAVES: post: {:f} ms", timer.ElapsedMicro() * 0.001);
     return NormalizeHeights(minHeight, maxHeight);
 }
 
 float WSTessendorf::NormalizeHeights(float minHeight, float maxHeight)
 {
+    m_MinHeight = minHeight;
+    m_MaxHeight = maxHeight;
+
     const float A = glm::max( glm::abs(minHeight), glm::abs(maxHeight) );
     const float OneOverA = 1.f / A;
 
-    for (size_t i = 0; i < m_Displacements.size(); ++i)
-    {
-        m_Displacements[i].y *= OneOverA;
-    }
+    std::for_each(m_Displacements.begin(), m_Displacements.end(),
+                  [OneOverA](auto& d){ d.y *= OneOverA; });
 
     return A;
 }
@@ -342,9 +277,12 @@ void WSTessendorf::SetTileLength(float length)
 
 void WSTessendorf::SetWindDirection(const glm::vec2& w)
 {
-    m_WindDir = w;
-    m_WindDirUnit = glm::normalize(m_WindDir);
-    m_WindDirLen = glm::length(m_WindDir);
+    m_WindDir = glm::normalize(w);
+}
+
+void WSTessendorf::SetWindSpeed(float v)
+{
+    m_WindSpeed = glm::max(0.0001f, v);
 }
 
 void WSTessendorf::SetAnimationPeriod(float T)
