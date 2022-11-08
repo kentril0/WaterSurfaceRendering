@@ -198,7 +198,7 @@ private:
 
     bool m_PlayAnimation{ true };
     float m_TimeCtr  { 0.0 };
-    float m_AnimSpeed{ 1.0 };
+    float m_AnimSpeed{ 3.0 };
 
     // -------------------------------------------------------------------------
     // Water Surface textures
@@ -239,18 +239,11 @@ private:
 
     struct WaterSurfaceUBO
     {
-        glm::vec2 resolution;   ///< Viewport resolution in pixels, w x h
         alignas(16) glm::vec3 camPos;
-        alignas(16) glm::vec3 viewMatRow0;
-        alignas(16) glm::vec3 viewMatRow1;
-        alignas(16) glm::vec3 viewMatRow2;
-        float camFOV;
-        float camNear;
-        float camFar;
         alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
-        // vec4(vec3(suncolor), sunIntensity)
+        //                    vec4(vec3(suncolor), sunIntensity)
         alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
-        float terrainDepth{ -100.0};
+        float terrainDepth{ -200.0};
         float skyIntensity{ 1.0 };
         float specularIntensity{ 0.6 };
         float specularHighlights{ 32.0 };
