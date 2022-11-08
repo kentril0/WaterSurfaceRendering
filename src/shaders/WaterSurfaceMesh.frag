@@ -7,12 +7,7 @@ layout(location = 0) out vec4 fragColor;
 
 layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 {
-    vec2  resolution;
     vec3  camPos;
-    mat3  camView;
-    float camFOV;
-    float camNear;
-    float camFar;
     vec3  sunDir;
     vec4  sunColor;  // vec4( vec3(sunColor), sunIntensity )
     // ----
@@ -96,9 +91,6 @@ const vec3 kAttenCoef = kAbsorbCoef + kBackScatterCoef;
  */
 float FresnelFull(in float theta_i, in float theta_t)
 {
-    // TODO angles?
-    //theta_i = acos( theta_i );
-    //theta_t = acos( theta_t );
     //theta_i = max(theta_i, 0.0);
     //theta_t = max(theta_t, 0.0);
 
@@ -116,7 +108,7 @@ float FresnelFull(in float theta_i, in float theta_t)
 
 vec3 Attenuate(const in float kDistance, const in float kDepth)
 {
-    return exp( -kAbsorbCoef * kDistance -kScatterCoef * kDepth );
+    return exp( -kAbsorbCoef * 0.1*kDistance -kScatterCoef * 0.1*kDepth);
 }
 
 /**
@@ -185,10 +177,6 @@ vec3 ComputeTerrainRadiance(
             0.0);
 }
 
-/**
- * @brief TODO
- * @return Color
- */
 vec3 ComputeWaterSurfaceColor(
     const in Ray ray,
     const in vec3 p_w,
@@ -234,41 +222,11 @@ vec3 ComputeWaterSurfaceColor(
 
 void main ()
 {
-    //const vec2 kResolution = surface.resolution;
-    //vec2 uv = vec2(gl_FragCoord.x, kResolution.y - gl_FragCoord.y) / kResolution.xy;
-    //uv = uv * 2.0 - 1.0;
-    //uv.x *= kResolution.x / kResolution.y;
-
-    // Set up ray based on camera settings
-    //const Ray ray = Ray(
-    //    surface.camPos,
-    //    surface.camView * normalize( vec3(uv, surface.camFOV) )
-    //);
-
     const Ray ray = Ray(surface.camPos, normalize(inPos-surface.camPos));
-
     const vec3 kNormal = normalize( texture(WSNormalmap, inUV).xyz );
     
-    vec3 c = ComputeWaterSurfaceColor(ray, inPos, kNormal);
+    vec3 color = ComputeWaterSurfaceColor(ray, inPos, kNormal);
+    // TODO color correction, grading
 
-    fragColor = vec4( c ,1.0);
-    return;
-
-    /*
-    const vec3 kSunDir = normalize(vec3(0.0, 1.0, 0.4));
-    const vec3 kRefractDir = RefractAirIncident(kSunDir, kNormal);
-
-    // inPos.xyz transformed position
-    const vec3 kRefractPos = IntersectGround(Ray(inPos, kRefractDir));
-
-    vec3 color;
-
-    const float kOldArea = length(dFdx(inPos)) * length(dFdy(inPos));
-    const float kNewArea = length(dFdx(kRefractPos)) * length(dFdy(kRefractPos));
-
-    color = vec3(kOldArea / kNewArea * 0.2);
-
-
-    fragColor = vec4(color, 1.0);
-    */
+    fragColor = vec4( color ,1.0);
 }

@@ -159,7 +159,6 @@ void WaterSurfaceMesh::PrepareRender(
     const glm::vec3& camPos
 )
 {
-    //m_VertexUBO.model = glm::scale(glm::mat4(1.0f), glm::vec3(5.f, 5.f, 5.f));
     m_VertexUBO.model = glm::mat4(1.0f);
     m_VertexUBO.view = viewMat;
     m_VertexUBO.proj = projMat;
@@ -168,20 +167,7 @@ void WaterSurfaceMesh::PrepareRender(
     // -> flip the sign on the scaling factor of the Y axis
     m_VertexUBO.proj[1][1] *= -1;
     
-    //const VkExtent2D screenExt = m_SwapChain->GetExtent();
-    //m_WaterSurfaceUBO.resolution.x = static_cast<float>(screenExt.width);
-    //m_WaterSurfaceUBO.resolution.y = static_cast<float>(screenExt.height);
-
     m_WaterSurfaceUBO.camPos = camPos;
-    //const glm::mat3 view = m_Camera->GetView();
-    //m_WaterSurfaceUBO.viewMatRow0 = view[0];
-    //m_WaterSurfaceUBO.viewMatRow1 = view[1];
-    //m_WaterSurfaceUBO.viewMatRow2 = view[2];
-
-    //m_WaterSurfaceUBO.camFOV = m_Camera->GetFov();
-    //m_WaterSurfaceUBO.camNear = m_Camera->GetNear();
-    //m_WaterSurfaceUBO.camFar = m_Camera->GetFar();
-
     m_WaterSurfaceUBO.terrainDepth = glm::min(m_WaterSurfaceUBO.terrainDepth,
                                               m_ModelTess->GetMinHeight());
     UpdateUniformBuffer(frameIndex);
