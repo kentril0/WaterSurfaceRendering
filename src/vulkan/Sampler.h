@@ -26,8 +26,8 @@ namespace vkp
         static VkSamplerCreateInfo InitSamplerInfo();
 
     public:
-        Sampler(Device& device);
-        Sampler(Device& device, 
+        Sampler(const Device& device);
+        Sampler(const Device& device,
                 const VkSamplerCreateInfo& info);
         Sampler(Sampler&& other);
 
@@ -46,7 +46,7 @@ namespace vkp
         Sampler& operator=(Sampler&&) = delete;
 
     private:
-        Device& m_Device;
+        const Device& m_Device;
 
         // ---------------------------------------------------------------------
         VkSampler m_Sampler{ VK_NULL_HANDLE };

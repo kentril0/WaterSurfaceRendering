@@ -9,7 +9,7 @@
 
 namespace vkp
 {
-    Sampler::Sampler(Device& d)
+    Sampler::Sampler(const Device& d)
         : m_Device(d),
           m_Sampler(VK_NULL_HANDLE)
     {
@@ -17,7 +17,7 @@ namespace vkp
         VKP_ASSERT(m_Device != VK_NULL_HANDLE);
     }
 
-    Sampler::Sampler(Device& d, const VkSamplerCreateInfo& info)
+    Sampler::Sampler(const Device& d, const VkSamplerCreateInfo& info)
         : Sampler(d)
     {
         Create(info);

@@ -111,7 +111,7 @@ namespace vkp
          * @return Result of the mapping call
          */
         VkResult Map(void** ppData,
-                     VkDeviceSize size = VK_WHOLE_SIZE, 
+                     VkDeviceSize size = VK_WHOLE_SIZE,
                      VkDeviceSize offset = 0);
 
         void* GetMappedAddress() const { return m_MapAddr; }
@@ -127,7 +127,8 @@ namespace vkp
          * @param destAddr Optional custom address in the buffer's mapped region
          *  to start copying to, if nullptr then the mapped address is used
          */
-        void CopyToMapped(const void* srcData, VkDeviceSize size,
+        void CopyToMapped(const void* srcData,
+                          VkDeviceSize size,
                           void* destAddr = nullptr);
 
         /**
