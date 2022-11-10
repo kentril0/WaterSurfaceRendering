@@ -67,8 +67,8 @@ void WaterSurfaceMesh::CreateRenderData(
 
         m_DescriptorSets.clear();
         CreateDescriptorSets(kImageCount);
-        // TODO must update !!
-        ///UpdateDescriptorSets();
+
+        // WARN: Also must update the descriptors before render
     }
 }
 
@@ -77,12 +77,10 @@ void WaterSurfaceMesh::Prepare(VkCommandBuffer cmdBuffer)
     CreateFrameMaps(cmdBuffer);
     const uint32_t kIndex = s_kWSResolutions.GetIndex(m_ModelTess->GetTileSize());
     m_CurFrameMap = &m_FrameMaps[kIndex];
+    SetDescriptorSetsDirty();
 
     PrepareModelTess(cmdBuffer);
     PrepareMesh(cmdBuffer);
-
-    // TODO temp
-    UpdateDescriptorSets();
 }
 
 void WaterSurfaceMesh::PrepareMesh(VkCommandBuffer cmdBuffer)
@@ -126,16 +124,16 @@ void WaterSurfaceMesh::PrepareModelTess(VkCommandBuffer cmdBuffer)
     // Do one pass to initialize the maps
 
     m_VertexUBO.WSHeightAmp = m_ModelTess->ComputeWaves(m_TimeCtr);
-
     CopyModelTessDataToStagingBuffer();
 
-    // Frame for upcomming render
-    // TODO
+#ifdef DOUBLE_BUFFERED
     m_FrameMapIndex = 0;
+    SetDescriptorSetsDirty();
+#endif
 
     UpdateFrameMaps(
         cmdBuffer,
-        m_CurFrameMap->data[m_FrameMapIndex]
+        m_CurFrameMap->data[0]
     );
 }
 
@@ -146,7 +144,6 @@ void WaterSurfaceMesh::Update(float dt)
         m_TimeCtr += dt * m_AnimSpeed;
 
         m_VertexUBO.WSHeightAmp = m_ModelTess->ComputeWaves(m_TimeCtr);
-
         CopyModelTessDataToStagingBuffer();
     }
 }
@@ -174,30 +171,20 @@ void WaterSurfaceMesh::PrepareRender(
 
     UpdateMeshBuffers(cmdBuffer);
 
+    UpdateDescriptorSet(frameIndex);
+
 #ifndef DOUBLE_BUFFERED
-    uint32_t transferIndex = 0;
-
     UpdateFrameMaps(
         cmdBuffer,
-        m_CurFrameMap->data[transferIndex]
+        m_CurFrameMap->data[0]
     );
-    // TODO if curMapChanged
-    // TODO update only if dirty
-    UpdateDescriptorSet(frameIndex);
-
 #else
-    UpdateDescriptorSet(frameIndex);
-
-    // TODO more general to size
-    uint32_t transferIndex = m_FrameMapIndex == 0 ? 1 : 0;
+    uint32_t transferIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
 
     UpdateFrameMaps(
         cmdBuffer,
         m_CurFrameMap->data[transferIndex]
     );
-
-    // TODO more general to size
-    //m_FrameMapIndex = m_FrameMapIndex == 0 ? 1 : 0;
 #endif
 }
 
@@ -222,7 +209,7 @@ void WaterSurfaceMesh::Render(
         *m_Pipeline,
         kFirstSet,
         kDescriptorSetCount,
-        &m_DescriptorSets[frameIndex],
+        &m_DescriptorSets[frameIndex].set,
         kDynamicOffsetCount,
         kDynamicOffsets
     );
@@ -230,7 +217,8 @@ void WaterSurfaceMesh::Render(
     m_Mesh->Render(cmdBuffer);
 
 #ifdef DOUBLE_BUFFERED
-    m_FrameMapIndex = m_FrameMapIndex == 0 ? 1 : 0;
+    m_FrameMapIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
+    SetDescriptorSetsDirty();
 #endif
 }
 
@@ -267,11 +255,13 @@ void WaterSurfaceMesh::UpdateDescriptorSets()
 
 void WaterSurfaceMesh::UpdateDescriptorSet(const uint32_t frameIndex)
 {
-    VKP_REGISTER_FUNCTION();
     VKP_ASSERT(frameIndex < m_DescriptorSets.size());
 
-    vkp::DescriptorWriter descriptorWriter(*m_DescriptorSetLayout,
-                                           m_DescriptorPool);
+    auto& set = m_DescriptorSets[frameIndex];
+    if (set.isDirty == false)
+        return;
+
+    VKP_REGISTER_FUNCTION();
 
     // Add water surface uniform buffers
     VkDescriptorBufferInfo bufferInfos[2] = {};
@@ -284,15 +274,12 @@ void WaterSurfaceMesh::UpdateDescriptorSet(const uint32_t frameIndex)
         m_Device.GetUniformBufferAlignment(sizeof(VertexUBO));
     bufferInfos[1].range = sizeof(WaterSurfaceUBO);
 
-    uint32_t binding = 0;
-
-    descriptorWriter
-        .AddBufferDescriptor(binding++, &bufferInfos[0])
-        .AddBufferDescriptor(binding++, &bufferInfos[1]);
-    
     // Add Water Surface textures
-    
+#ifndef DOUBLE_BUFFERED
+    const auto& kFrameMaps = m_CurFrameMap->data[0];
+#else
     const auto& kFrameMaps = m_CurFrameMap->data[m_FrameMapIndex];
+#endif
 
     VKP_ASSERT(kFrameMaps.displacementMap != nullptr);
     VKP_ASSERT(kFrameMaps.normalMap != nullptr);
@@ -305,12 +292,26 @@ void WaterSurfaceMesh::UpdateDescriptorSet(const uint32_t frameIndex)
     // TODO force future image layout
     imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+    vkp::DescriptorWriter descriptorWriter(*m_DescriptorSetLayout,
+                                           m_DescriptorPool);
+    uint32_t binding = 0;
+
     descriptorWriter
+        .AddBufferDescriptor(binding++, &bufferInfos[0])
+        .AddBufferDescriptor(binding++, &bufferInfos[1])
         .AddImageDescriptor(binding++, &imageInfos[0])
         .AddImageDescriptor(binding++, &imageInfos[1]);
 
-    // Update the set
-    descriptorWriter.UpdateSet(m_DescriptorSets[frameIndex]);
+    descriptorWriter.UpdateSet(set.set);
+    set.isDirty = false;
+}
+
+void WaterSurfaceMesh::SetDescriptorSetsDirty()
+{
+    VKP_REGISTER_FUNCTION();
+    // TODO for_each ?
+    for (auto& set : m_DescriptorSets)
+        set.isDirty = true;
 }
 
 // -----------------------------------------------------------------------------
@@ -428,14 +429,14 @@ void WaterSurfaceMesh::CreateDescriptorSets(const uint32_t kCount)
 {
     VKP_REGISTER_FUNCTION();
 
-    m_DescriptorSets.resize(kCount, VK_NULL_HANDLE);
+    m_DescriptorSets.resize(kCount);
 
     VkResult err;
     for (auto& set : m_DescriptorSets)
     {
         err = m_DescriptorPool.AllocateDescriptorSet(
             *m_DescriptorSetLayout,
-            set
+            set.set
         );
         VKP_ASSERT_RESULT(err);
     }
@@ -598,8 +599,6 @@ void WaterSurfaceMesh::CreateFrameMaps(VkCommandBuffer cmdBuffer)
                                         s_kUseMipMapping);
         }
     }
-
-    m_FrameMapIndex = 0;
 }
 
 std::unique_ptr<vkp::Texture2D> WaterSurfaceMesh::CreateMap(
@@ -830,6 +829,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
                 const uint32_t kIndex =
                     s_kWSResolutions.GetIndex(m_ModelTess->GetTileSize());
                 m_CurFrameMap = &m_FrameMaps[kIndex];
+                SetDescriptorSetsDirty();
             }
 
             if (kNeedsPrepare)

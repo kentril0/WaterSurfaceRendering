@@ -23,6 +23,7 @@
 
 
 /**
+ * EXPERIMENTAL
  * @brief Enable for double buffered textures: two sets of textures, one used for
  *  copying to, the other for rendering to, at each frame they are swapped.
  * For the current use-case, the performance might be slightly worse.
@@ -94,6 +95,8 @@ private:
     void UpdateUniformBuffer(const uint32_t imageIndex);
     void UpdateDescriptorSets();
     void UpdateDescriptorSet(const uint32_t frameIndex);
+    void SetDescriptorSetsDirty();
+
     void CreateDescriptorSetLayout();
     void CreateUniformBuffers(const uint32_t kBufferCount);
     void SetupPipeline();
@@ -177,7 +180,13 @@ private:
     };
 
     std::unique_ptr<vkp::DescriptorSetLayout> m_DescriptorSetLayout{ nullptr };
-    std::vector<VkDescriptorSet>              m_DescriptorSets;
+
+    struct DescriptorSetStatus
+    {
+        bool            isDirty{ true };
+        VkDescriptorSet set{ VK_NULL_HANDLE };
+    };
+    std::vector<DescriptorSetStatus>              m_DescriptorSets;
 
     // Uniform buffer for each swap chain image
     //   Cleanup after fininshed rendering or on swap chain recreation
@@ -224,7 +233,9 @@ private:
     // Bound pair for the current model's size
     FrameMapPair* m_CurFrameMap{ nullptr };
 
+#ifdef DOUBLE_BUFFERED
     uint32_t m_FrameMapIndex{ 0 };      ///< Swap index
+#endif
 
     // -------------------------------------------------------------------------
     // Uniform buffers data
