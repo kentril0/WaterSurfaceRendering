@@ -247,6 +247,10 @@ private:
         float skyIntensity{ 1.0 };
         float specularIntensity{ 0.6 };
         float specularHighlights{ 32.0 };
+        alignas(16) glm::vec3 absorpCoef;//{ s_kWaterTypesCoeffsApprox[m_WaterTypeCoefIndex] };
+        alignas(16) glm::vec3 scatterCoef;//{
+            //ComputeScatteringCoefPA01(s_kScatterCoefLambda0[m_BaseScatterCoefIndex]) };
+        alignas(16) glm::vec3 backscatterCoef;//{ComputeBackscatteringCoefPigmentPA01(1.0)};
     };
 
     VertexUBO m_VertexUBO{};
@@ -260,6 +264,119 @@ private:
         { 16, 32, 64, 128, 256, 512, 1024 },
         { "16", "32", "64", "128", "256", "512", "1024" }
     };
+
+    // Jerlov water types: a classification based on coefficient K_d(\lambda) (diffuse attenuation coefficient for downwelling irradiance) [PA01]
+    // twelve water types with assigned K_d(\lambda) spectrum
+    //  I to III are for open ocean waters:
+    //      with type I being the clearest, type III being the most turbid
+    //  1-9 correspond to coastal waters, from clearest to the most turbid
+
+    static constexpr glm::vec3 s_kWavelengthsRGB_m{ 680e-9, 550e-9, 440e-9};
+    static constexpr glm::vec3 s_kWavelengthsRGB_nm{ 680, 550, 440 };
+
+    uint32_t m_WaterTypeCoefIndex{ 0 };
+    // Values of K_d for wavelengths: Red (680 nm), Green (550 nm), Blue (440 nm)
+    //  INTERPOLATED from measured data in [PA01]
+    // In m^-1
+    static constexpr gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsApprox{
+        { glm::vec3{0.448, 0.063, 0.0202},
+          glm::vec3{0.494, 0.089, 0.0732},
+          glm::vec3{0.548, 0.120, 0.145 },
+          glm::vec3{0.538, 0.120, 0.294 },
+          glm::vec3{0.590, 0.190, 0.450 },
+          glm::vec3{0.680, 0.300, 0.648 },
+          glm::vec3{0.808, 0.460, 1.014 },
+          glm::vec3{0.956, 0.630, 1.720 }
+        },
+        { "I: Clearest open ocean",
+          "II: Clear open ocean",
+          "III: Turbid open ocean", 
+          "1: Clearest coastal waters",
+          "3: Clear coastal waters",
+          "5: Semi-clear coastal waters",
+          "7: Turbid coastal waters",
+          "9: Most turbid coastal waters"
+        }
+    };
+
+    static constexpr glm::vec3 s_kWavelengthsData_m{ 675e-9, 550e-9, 450e-9 };
+    static constexpr glm::vec3 s_kWavelengthsData_nm{ 675, 550, 450 };
+
+    // Values of K_d for wavelengths: Red (675 nm), Green (550 nm), Blue (450 nm)
+    //  real measured data from [PA01]  
+    // In m^-1
+    static constexpr gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsAccurate{
+        { glm::vec3{0.420, 0.063, 0.019},
+          glm::vec3{0.465, 0.089, 0.068},
+          glm::vec3{0.520, 0.120, 0.135},
+          glm::vec3{0.510, 0.120, 0.250},
+          glm::vec3{0.560, 0.190, 0.390},
+          glm::vec3{0.650, 0.300, 0.560},
+          glm::vec3{0.780, 0.460, 0.890},
+          glm::vec3{0.920, 0.630, 1.600}
+        },
+        { "I: Clearest open ocean",
+          "II: Clear open ocean",
+          "III: Turbid open ocean", 
+          "1: Clearest coastal waters",
+          "3: Clear coastal waters",
+          "5: Semi-clear coastal waters",
+          "7: Turbid coastal waters",
+          "9: Most turbid coastal waters"
+        }
+    };
+
+    uint32_t m_BaseScatterCoefIndex{ 0 };
+    // Scattering coefficient at wavelength0 = 514 nm for water types, [PA01]
+    //  in m^-1
+    static constexpr gui::ValueStringArray<float, 3> s_kScatterCoefLambda0 {
+        { 0.037, 0.219, 1.824 },
+        { "I: Clear ocean", "1: Coastal ocean", "9: Turbid harbor" }
+    };
+
+    glm::vec3 ComputeScatteringCoefPA01(float b_lambda0) const
+    {
+        return b_lambda0 * ( (-0.00113f * s_kWavelengthsRGB_nm + 1.62517f)
+                            /
+                             (-0.00113f * 514.0f               + 1.62517f) );
+    }
+
+    /**
+     * @param b Scattering coefficient for each wavelength, in m^-1
+     * @return Backscattering coefficient for each wavelength, from [PA01]
+     */
+    glm::vec3 ComputeBackscatteringCoefPA01(const glm::vec3& b) const
+    {
+        return 0.01829f * b + 0.00006f;
+    }
+
+    /**
+     * @param C pigment concentration for an open water type, [mg/m^3]
+     * @return Backscattering coefficient based on eqs.:24,25,26 in [PA01]
+     */
+    glm::vec3 ComputeBackscatteringCoefPigmentPA01(float C) const
+    {
+        // Molecular scattering coefficient of water
+        //  Jerlov Water Types
+        //const glm::vec3 b_w = 5.83f * 0.001f *
+        //                      glm::pow((400.0f / s_kWavelengthsRGB_nm ), glm::vec3(4.322) );
+        // From Figure 4: https://www.oceanopticsbook.info/view/optical-constituents-of-the-ocean/water
+        // const glm::vec3 b_w( 0.00075, 0.002, 0.005);
+
+        // Morel. Optical modeling of the upper ocean in relation to its biogenus
+        //  matter content.
+        const glm::vec3 b_w( 0.0007, 0.00173, 0.005);
+
+        // Ratio of backscattering and scattering coeffiecients of the pigments
+        const glm::vec3 B_b = 0.002f + 0.02f * ( 0.5f - 0.25f *
+                                ( (1.0f/glm::log(10.0f)) * glm::log(C) ) // base 10 log
+                              ) * ( 550.0f / s_kWavelengthsRGB_nm );
+        // Scattering coefficient of the pigment
+        const float b_p = 0.3f * glm::pow(C, 0.62f);
+
+        return 0.5 * b_w + B_b * b_p;
+    }
+
 };
 
 struct WaterSurfaceMesh::Vertex

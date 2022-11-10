@@ -15,6 +15,9 @@ layout(set = 0, binding = 1) uniform WaterSurfaceUBO
     float skyIntensity;
     float specularIntensity;
     float specularHighlights;
+    vec3 absorpCoef;
+    vec3 scatterCoef;
+    vec3 backscatterCoef;
 } surface;
 
 layout(binding = 3) uniform sampler2D WSNormalmap;
@@ -65,6 +68,7 @@ vec3 TerrainColor(const in vec3 p)
     return kMate;
 }
 
+/*
 const float kC_p = 2.0; // Water type III
 const vec3 kWavelengths = vec3(680e-9, 550e-9, 440e-9);
 const vec3 K_d = vec3(0.54357, 0.120, 0.150);    // Ocean waters type III
@@ -80,6 +84,7 @@ const vec3 kBackScatterCoef = 0.5 * vec3(0.1) + (
     ) * 0.30 * pow(kC_p, 0.62);
 
 const vec3 kAttenCoef = kAbsorbCoef + kBackScatterCoef;
+*/
 
 /**
  * @brief Fresnel reflectance for unpolarized incident light
@@ -108,7 +113,7 @@ float FresnelFull(in float theta_i, in float theta_t)
 
 vec3 Attenuate(const in float kDistance, const in float kDepth)
 {
-    return exp( -kAbsorbCoef * 0.1*kDistance -kScatterCoef * 0.1*kDepth);
+    return exp( -surface.absorpCoef * 0.1*kDistance -surface.scatterCoef * 0.1*kDepth);
 }
 
 /**
@@ -202,7 +207,7 @@ vec3 ComputeWaterSurfaceColor(
         const vec3 E_d0 = M_PI*L_a + L_s;
 
         // Constant diffuse radiance just below the surface from sun and sky
-        const vec3 L_df0 = (0.33*kBackScatterCoef) / kAbsorbCoef * (E_d0 * ONE_OVER_PI);
+        const vec3 L_df0 = (0.33*surface.backscatterCoef) / surface.absorpCoef * (E_d0 * ONE_OVER_PI);
 
         const Ray kRefractRay = Ray( p_w, kRefractDir );
 

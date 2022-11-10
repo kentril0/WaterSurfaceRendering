@@ -761,7 +761,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
         static glm::vec2 windDir = m_ModelTess->GetWindDir();
         static float windSpeed = m_ModelTess->GetWindSpeed();
         static float animPeriod = m_ModelTess->GetAnimationPeriod();
-        static float phillipsA = m_ModelTess->GetPhillipsConst();
+        static float phillipsA = m_ModelTess->GetPhillipsConst() * 1e7;
         static float damping = m_ModelTess->GetDamping();
         static float lambda = m_ModelTess->GetDisplacementLambda();
 
@@ -782,8 +782,8 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
         if (ImGui::TreeNodeEx("Phillips Spectrum", 
                               ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::DragFloat("A constant", &phillipsA, 0.00001f, 0.0f, 1.0f,
-                             "%.5f");
+            ImGui::DragFloat("A constant (10^-7)", &phillipsA, 0.1f, 1.0f, 10.0f,
+                             "%.2f");
             ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
                              "%.4f");
             ImGui::TreePop();
@@ -807,9 +807,8 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
                 glm::epsilonNotEqual(animPeriod,
                                      m_ModelTess->GetAnimationPeriod(), 0.001f);
             const bool kPhillipsConstChanged =
-                glm::epsilonNotEqual(phillipsA,
-                                     m_ModelTess->GetPhillipsConst(),
-                                     WSTessendorf::s_kDefaultPhillipsConst / 10.f);
+                glm::epsilonNotEqual(phillipsA * 1e-7f,
+                                     m_ModelTess->GetPhillipsConst(), 1e-8f);
             const bool kDampingChanged =
                 glm::epsilonNotEqual(damping,
                                      m_ModelTess->GetDamping(),
@@ -840,7 +839,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
                 m_ModelTess->SetWindDirection(windDir);
                 m_ModelTess->SetWindSpeed(windSpeed);
                 m_ModelTess->SetAnimationPeriod(animPeriod);
-                m_ModelTess->SetPhillipsConst(phillipsA);
+                m_ModelTess->SetPhillipsConst(phillipsA * 1e-7);
                 m_ModelTess->SetDamping(damping);
 
                 m_ModelTess->Prepare();
@@ -890,6 +889,25 @@ void WaterSurfaceMesh::ShowMeshSettings()
     }
 }
 
+static void ShowComboBox(const char* name, 
+    const char* const items[], const uint32_t kItemCount,
+    const char* previewValue, uint32_t* pCurrentIndex)
+{
+    if ( ImGui::BeginCombo(name, previewValue) )
+    {
+        for (uint32_t n = 0; n < kItemCount; ++n)
+        {
+            const bool is_selected = (*pCurrentIndex == n);
+            if (ImGui::Selectable(items[n], is_selected))
+                *pCurrentIndex = n;
+
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+}
+
 void WaterSurfaceMesh::ShowLightingSettings()
 {
     if (ImGui::CollapsingHeader("Lighting settings",
@@ -908,9 +926,32 @@ void WaterSurfaceMesh::ShowLightingSettings()
         ImGui::SliderFloat("Specular Highlights",
                            &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
 
+        ShowComboBox("Absorption coefficient",
+                     s_kWaterTypesCoeffsApprox.strings.data(),
+                     s_kWaterTypesCoeffsApprox.size(),
+                     s_kWaterTypesCoeffsApprox.strings[m_WaterTypeCoefIndex],
+                     &m_WaterTypeCoefIndex);
+        m_WaterSurfaceUBO.absorpCoef = s_kWaterTypesCoeffsApprox[m_WaterTypeCoefIndex];
+
+        ShowComboBox("Base scattering coefficient",
+                     s_kScatterCoefLambda0.strings.data(),
+                     s_kScatterCoefLambda0.size(),
+                     s_kScatterCoefLambda0.strings[m_BaseScatterCoefIndex],
+                     &m_BaseScatterCoefIndex);
+
+        m_WaterSurfaceUBO.scatterCoef =
+            ComputeScatteringCoefPA01(s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
+
+        static float pigmentC = 1.0;
+        ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
+
+        m_WaterSurfaceUBO.backscatterCoef =
+            ComputeBackscatteringCoefPigmentPA01(pigmentC * 100.);
+
         // Terrain
         ImGui::DragFloat("Terrain plane depth", &m_WaterSurfaceUBO.terrainDepth,
                          1.0f, -999.0f, 0.0f);
+        // TODO auto min, max
 
         ImGui::NewLine();
     }
