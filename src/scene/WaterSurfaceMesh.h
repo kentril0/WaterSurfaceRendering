@@ -254,14 +254,13 @@ private:
         alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
         //                    vec4(vec3(suncolor), sunIntensity)
         alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
-        float terrainDepth{ -200.0};
+        float terrainDepth{ -999.0};
         float skyIntensity{ 1.0 };
         float specularIntensity{ 0.6 };
         float specularHighlights{ 32.0 };
-        alignas(16) glm::vec3 absorpCoef;//{ s_kWaterTypesCoeffsApprox[m_WaterTypeCoefIndex] };
-        alignas(16) glm::vec3 scatterCoef;//{
-            //ComputeScatteringCoefPA01(s_kScatterCoefLambda0[m_BaseScatterCoefIndex]) };
-        alignas(16) glm::vec3 backscatterCoef;//{ComputeBackscatteringCoefPigmentPA01(1.0)};
+        alignas(16) glm::vec3 absorpCoef;
+        alignas(16) glm::vec3 scatterCoef;
+        alignas(16) glm::vec3 backscatterCoef;
     };
 
     VertexUBO m_VertexUBO{};
@@ -269,6 +268,8 @@ private:
 
     // -------------------------------------------------------------------------
     // GUI stuff
+
+    bool m_ClampDepth{ true };
 
     // Should correspond to s_kMaxTileSize and s_kMinTileSize range
     static constexpr gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{

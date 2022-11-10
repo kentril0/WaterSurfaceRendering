@@ -165,8 +165,12 @@ void WaterSurfaceMesh::PrepareRender(
     m_VertexUBO.proj[1][1] *= -1;
     
     m_WaterSurfaceUBO.camPos = camPos;
-    m_WaterSurfaceUBO.terrainDepth = glm::min(m_WaterSurfaceUBO.terrainDepth,
-                                              m_ModelTess->GetMinHeight());
+    if (m_ClampDepth)
+    {
+        m_WaterSurfaceUBO.terrainDepth = glm::min(m_WaterSurfaceUBO.terrainDepth,
+                                                  m_ModelTess->GetMinHeight());
+    }
+
     UpdateUniformBuffer(frameIndex);
 
     UpdateMeshBuffers(cmdBuffer);
@@ -764,6 +768,8 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
         static float damping = m_ModelTess->GetDamping();
         static float lambda = m_ModelTess->GetDisplacementLambda();
 
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+
         ImGui::SliderInt("Sample Resolution", &tileRes, 0,
                          s_kWSResolutions.size() -1, resName);
         ImGui::DragFloat("Tile Length", &tileLen, 2.0f, 0.0f, 1024.0f, "%.0f");
@@ -772,7 +778,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
         ImGui::DragFloat2("Wind Direction", glm::value_ptr(windDir),
                           0.1f, 0.0f, 0.0f, "%.1f");
         ImGui::DragFloat("Wind Speed", &windSpeed, 0.1f);
-        ImGui::DragFloat("Lambda", &lambda,
+        ImGui::DragFloat("Choppy correction", &lambda,
                               0.1f, -8.0f, 8.0f, "%.1f");
         ImGui::DragFloat("Animation Period", &animPeriod, 1.0f, 1.0f, 0.0f, "%.0f");
         ImGui::DragFloat("Animation speed", &m_AnimSpeed, 0.1f, 0.1f, 8.0f);
@@ -781,7 +787,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
         if (ImGui::TreeNodeEx("Phillips Spectrum", 
                               ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::DragFloat("A constant (10^-7)", &phillipsA, 0.1f, 1.0f, 10.0f,
+            ImGui::DragFloat("Amplitude (10^-7)", &phillipsA, 0.1f, 1.0f, 10.0f,
                              "%.2f");
             ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
                              "%.4f");
@@ -848,6 +854,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
             m_ModelTess->SetLambda(lambda);
         }
 
+        ImGui::PopItemWidth();
         ImGui::NewLine();
     }
 }
@@ -860,6 +867,8 @@ void WaterSurfaceMesh::ShowMeshSettings()
         static int tileSize = m_TileSize;
         static float tileLength = WSTessendorf::s_kDefaultTileLength;
         static float vertexDist = tileLength / static_cast<float>(tileSize);
+
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
 
         ImGui::SliderInt("Tile Resolution", &tileSize, s_kMinTileSize,
                          s_kMaxTileSize);
@@ -885,6 +894,7 @@ void WaterSurfaceMesh::ShowMeshSettings()
             }
         }
 
+        ImGui::PopItemWidth();
         ImGui::NewLine();
     }
 }
@@ -908,12 +918,39 @@ static void ShowComboBox(const char* name,
     }
 }
 
+static glm::vec3 GetDirFromAngles(float inclination, float azimuth)
+{
+    return glm::normalize(
+        glm::vec3( glm::sin(inclination) * glm::cos(azimuth),
+                   glm::cos(inclination),
+                   glm::sin(inclination) * glm::sin(azimuth) )
+    );
+}
+
 void WaterSurfaceMesh::ShowLightingSettings()
 {
     if (ImGui::CollapsingHeader("Lighting settings",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
-        // TODO zenith, azimuth
+        static float sunAzimuth = glm::radians(90.0f);        // [-pi, pi]
+        static float sunInclination = glm::radians(22.0f);    // [-pi/2, pi/2]
+
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.29f);
+        {
+            bool s = ImGui::SliderAngle("##Sun Inclination",
+                                        &sunInclination, -90.f, 90.f);
+            ImGui::SameLine();
+            bool s1 = ImGui::SliderAngle("Sun angles##Sun Azimuth",
+                                         &sunAzimuth, -180.f, 180.f);
+            if (s || s1)
+            {
+                m_WaterSurfaceUBO.sunDir =
+                    GetDirFromAngles(sunInclination, sunAzimuth);
+            }
+        }
+        ImGui::PopItemWidth();
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+
         ImGui::DragFloat3("Sun direction",
                           glm::value_ptr(m_WaterSurfaceUBO.sunDir), 0.1f);
         ImGui::SliderFloat("Sun intensity", &m_WaterSurfaceUBO.sunColor.a, 0.f, 10.f);
@@ -926,33 +963,42 @@ void WaterSurfaceMesh::ShowLightingSettings()
         ImGui::SliderFloat("Specular Highlights",
                            &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
 
-        ShowComboBox("Absorption coefficient",
-                     s_kWaterTypesCoeffsApprox.strings.data(),
-                     s_kWaterTypesCoeffsApprox.size(),
-                     s_kWaterTypesCoeffsApprox.strings[m_WaterTypeCoefIndex],
-                     &m_WaterTypeCoefIndex);
-        m_WaterSurfaceUBO.absorpCoef = s_kWaterTypesCoeffsApprox[m_WaterTypeCoefIndex];
+        if (ImGui::TreeNodeEx("Water Properties", 
+                              ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ShowComboBox("Absorption type",
+                         s_kWaterTypesCoeffsAccurate.strings.data(),
+                         s_kWaterTypesCoeffsAccurate.size(),
+                         s_kWaterTypesCoeffsAccurate.strings[m_WaterTypeCoefIndex],
+                         &m_WaterTypeCoefIndex);
+            m_WaterSurfaceUBO.absorpCoef =
+                s_kWaterTypesCoeffsAccurate[m_WaterTypeCoefIndex];
 
-        ShowComboBox("Base scattering coefficient",
-                     s_kScatterCoefLambda0.strings.data(),
-                     s_kScatterCoefLambda0.size(),
-                     s_kScatterCoefLambda0.strings[m_BaseScatterCoefIndex],
-                     &m_BaseScatterCoefIndex);
+            ShowComboBox("Scattering type",
+                         s_kScatterCoefLambda0.strings.data(),
+                         s_kScatterCoefLambda0.size(),
+                         s_kScatterCoefLambda0.strings[m_BaseScatterCoefIndex],
+                         &m_BaseScatterCoefIndex);
 
-        m_WaterSurfaceUBO.scatterCoef =
-            ComputeScatteringCoefPA01(s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
+            m_WaterSurfaceUBO.scatterCoef =
+                ComputeScatteringCoefPA01(
+                    s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
 
-        static float pigmentC = 1.0;
-        ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
+            static float pigmentC = 1.0;
+            ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
 
-        m_WaterSurfaceUBO.backscatterCoef =
-            ComputeBackscatteringCoefPigmentPA01(pigmentC * 100.);
+            m_WaterSurfaceUBO.backscatterCoef =
+                ComputeBackscatteringCoefPigmentPA01(pigmentC * 10.f);
 
-        // Terrain
-        ImGui::DragFloat("Terrain plane depth", &m_WaterSurfaceUBO.terrainDepth,
-                         1.0f, -999.0f, 0.0f);
-        // TODO auto min, max
+            // Terrain
+            ImGui::DragFloat("Ocean depth [cm]", &m_WaterSurfaceUBO.terrainDepth,
+                             1.0f, -999.0f, 0.0f);
+            ImGui::Checkbox(" Clamp to surface height", &m_ClampDepth);
 
+            ImGui::TreePop();
+        }
+
+        ImGui::PopItemWidth();
         ImGui::NewLine();
     }
 }
