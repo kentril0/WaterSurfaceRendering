@@ -1,7 +1,8 @@
 #version 450
 
-layout(location = 0) in vec3 inPos;
-layout(location = 1) in vec2 inUV;
+layout(location = 0) in vec4 inPos;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec2 inUV;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -19,8 +20,6 @@ layout(set = 0, binding = 1) uniform WaterSurfaceUBO
     vec3 scatterCoef;
     vec3 backscatterCoef;
 } surface;
-
-layout(binding = 3) uniform sampler2D WSNormalmap;
 
 #define M_PI 3.14159265358979323846
 #define ONE_OVER_PI (1.0 / M_PI)
@@ -227,10 +226,15 @@ vec3 ComputeWaterSurfaceColor(
 
 void main ()
 {
-    const Ray ray = Ray(surface.camPos, normalize(inPos-surface.camPos));
-    const vec3 kNormal = normalize( texture(WSNormalmap, inUV).xyz );
-    
-    vec3 color = ComputeWaterSurfaceColor(ray, inPos, kNormal);
+    const Ray ray = Ray(surface.camPos, normalize(inPos.xyz-surface.camPos));
+    const vec3 kNormal = normalize( inNormal );
+
+    vec3 color = ComputeWaterSurfaceColor(ray, inPos.xyz, kNormal);
+
+    // TODO foam
+    if (inPos.w < 0.0)
+        color = vec3(1.0);
+
     // TODO color correction, grading
 
     fragColor = vec4( color ,1.0);
