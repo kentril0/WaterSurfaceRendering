@@ -178,9 +178,9 @@ private:
     // -------------------------------------------------------------------------
     // Data
 
-    // vec4(Displacement_X, height, Displacement_Z, padding)
+    // vec4(Displacement_X, height, Displacement_Z, [jacobian])
     std::vector<Displacement> m_Displacements;
-    // vec4(normal_X, normal_Y, normal_Z, padding)
+    // vec4(slopeX, slopeZ, dDxdx, dDzdz )
     std::vector<Normal> m_Normals;
 
     // =========================================================================
@@ -199,12 +199,25 @@ private:
     Complex* m_SlopeZ{ nullptr };
     Complex* m_DisplacementX{ nullptr };
     Complex* m_DisplacementZ{ nullptr };
+    Complex* m_dxDisplacementX{ nullptr };
+    Complex* m_dzDisplacementZ{ nullptr };
+#ifdef COMPUTE_JACOBIAN
+    Complex* m_dxDisplacementZ{ nullptr };
+    Complex* m_dzDisplacementX{ nullptr };
+#endif
 
+    // TODO Profile: once plan is created, changing to another data pointers is fast
     fftwf_plan m_PlanHeight{ nullptr };
     fftwf_plan m_PlanSlopeX{ nullptr };
     fftwf_plan m_PlanSlopeZ{ nullptr };
     fftwf_plan m_PlanDisplacementX{ nullptr };
     fftwf_plan m_PlanDisplacementZ{ nullptr };
+    fftwf_plan m_PlandxDisplacementX{ nullptr };
+    fftwf_plan m_PlandzDisplacementZ{ nullptr };
+#ifdef COMPUTE_JACOBIAN
+    fftwf_plan m_PlandxDisplacementZ{ nullptr };
+    fftwf_plan m_PlandzDisplacementX{ nullptr };
+#endif
 
     float m_MinHeight{ -999.0 };
     float m_MaxHeight{ 999.0 };
