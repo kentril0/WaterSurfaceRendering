@@ -163,6 +163,8 @@ void WaterSurfaceMesh::PrepareRender(
     // Vulkan uses inverted Y coord in comparison to OpenGL (set by glm lib)
     // -> flip the sign on the scaling factor of the Y axis
     m_VertexUBO.proj[1][1] *= -1;
+
+    m_VertexUBO.WSChoppy = m_ModelTess->GetDisplacementLambda();
     
     m_WaterSurfaceUBO.camPos = camPos;
     if (m_ClampDepth)
@@ -350,7 +352,7 @@ void WaterSurfaceMesh::CreateDescriptorSetLayout()
         .AddBinding({
             .binding = bindingPoint++,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
         })
         .Build();
 }
