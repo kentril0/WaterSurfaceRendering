@@ -9,6 +9,8 @@
 
 #include <imgui/imgui.h>
 
+#include <core/Profile.h>
+
 
 /**
  * @pre size > 0
@@ -74,6 +76,8 @@ void WaterSurfaceMesh::CreateRenderData(
 
 void WaterSurfaceMesh::Prepare(VkCommandBuffer cmdBuffer)
 {
+    VKP_PROFILE_SCOPE();
+
     CreateFrameMaps(cmdBuffer);
     const uint32_t kIndex = s_kWSResolutions.GetIndex(m_ModelTess->GetTileSize());
     m_CurFrameMap = &m_FrameMaps[kIndex];
@@ -92,6 +96,7 @@ void WaterSurfaceMesh::PrepareMesh(VkCommandBuffer cmdBuffer)
 void WaterSurfaceMesh::GenerateMeshVerticesIndices()
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     std::vector<Vertex> vertices = CreateGridVertices(m_TileSize,
                                                       m_VertexDistance);
@@ -492,6 +497,7 @@ std::vector<WaterSurfaceMesh::Vertex> WaterSurfaceMesh::CreateGridVertices(
 )
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     std::vector<Vertex> vertices;
 
@@ -528,6 +534,7 @@ std::vector<uint32_t> WaterSurfaceMesh::CreateGridIndices(
 )
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     const uint32_t kVertexCount = kTileSize+1;
 

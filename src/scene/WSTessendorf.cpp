@@ -6,6 +6,8 @@
 #include "pch.h"
 #include "scene/WSTessendorf.h"
 
+#include <core/Profile.h>
+
 
 WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength)
 {
@@ -31,6 +33,7 @@ WSTessendorf::~WSTessendorf()
 void WSTessendorf::Prepare()
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     VKP_LOG_INFO("Water surface resolution: {} x {}", m_TileSize, m_TileSize);
 
@@ -52,6 +55,7 @@ void WSTessendorf::Prepare()
 std::vector<WSTessendorf::WaveVector> WSTessendorf::ComputeWaveVectors() const
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     const int32_t kSize = m_TileSize;
     const float kLength = m_TileLength;
@@ -79,6 +83,7 @@ std::vector<WSTessendorf::BaseWaveHeight>
     WSTessendorf::ComputeBaseWaveHeightField() const
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     const int32_t kSize = m_TileSize;
     const float kLength = m_TileLength;
@@ -214,6 +219,7 @@ void WSTessendorf::DestroyFFTW()
 
 float WSTessendorf::ComputeWaves(float t)
 {
+    VKP_PROFILE_SCOPE();
     const auto kTileSize = m_TileSize;
 
     for (uint32_t m = 0; m < kTileSize; ++m)
