@@ -189,6 +189,7 @@ set(MAIN_SCENE_DIR "${MAIN_DIR}/scene")
 # TODO file(GLOB sources *.cpp)
 set(MAIN_SOURCES 
     "${MAIN_CORE_DIR}/Log.cpp"
+    "${MAIN_CORE_DIR}/Profile.cpp"
     "${MAIN_VULKAN_DIR}/utils.cpp"
     "${MAIN_VULKAN_DIR}/Instance.cpp"
     "${MAIN_VULKAN_DIR}/PhysicalDevice.cpp"
