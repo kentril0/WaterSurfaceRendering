@@ -360,6 +360,10 @@ void WaterSurface::UpdateGui()
 
     ShowStatusWindow();
 
+    static bool controlsOpened = true;
+    if (controlsOpened)
+        ShowControlsWindow(&controlsOpened);
+
     if (m_State != States::GuiControls)
         return;
 
@@ -370,11 +374,33 @@ void WaterSurface::UpdateGui()
     }
 
     ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
+    if ( ImGui::Button("Open Controls window") )
+        controlsOpened = true;
 
     ShowCameraSettings();
     m_WaterSurfaceMesh->ShowGUISettings();
 
     ImGui::End();
+}
+
+void WaterSurface::ShowControlsWindow(bool* p_open) const
+{
+    if ( !ImGui::Begin("Application Controls", p_open) )
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Global:");
+    ImGui::BulletText("ESC to show / hide Configuration menu");
+    ImGui::Separator();
+
+    ImGui::Text("Camera:");
+    ImGui::BulletText("When menu is hidden: use Mouse to pan.");
+    ImGui::BulletText("WASD keys to fly.");
+    ImGui::BulletText("Left Shift to speed up.");
+    ImGui::BulletText("Left Ctrl to slow down.");
+    ImGui::Separator();
 }
 
 void WaterSurface::ShowStatusWindow() const
