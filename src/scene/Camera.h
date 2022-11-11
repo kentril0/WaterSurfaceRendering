@@ -261,8 +261,8 @@ namespace vkp
                                DEFAULT_PITCH_RAD{ glm::radians( 0.0f) },
                                MAX_PITCH_RAD    { glm::radians( 89.0f) },
 
-                               MOVE_SPEED        { 10.0f },
-                               SPEEDUP_MULTIPLIER{ 2.0f  },
+                               MOVE_SPEED        { 25.0f },
+                               SPEEDUP_MULTIPLIER{ 3.0f  },
                                MOUSE_SENSITIVITY { 0.1f  };
     };
 #else
@@ -280,8 +280,8 @@ namespace vkp
                     DEFAULT_PITCH_RAD{ glm::radians( 0.0f) },
                     MAX_PITCH_RAD    { glm::radians( 89.0f) },
 
-                    MOVE_SPEED        { 20.0f },
-                    SPEEDUP_MULTIPLIER{ 2.0f  },
+                    MOVE_SPEED        { 25.0f },
+                    SPEEDUP_MULTIPLIER{ 3.0f  },
                     MOUSE_SENSITIVITY { 0.1f  };
     };
 
