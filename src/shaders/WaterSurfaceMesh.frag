@@ -67,24 +67,6 @@ vec3 TerrainColor(const in vec3 p)
     return kMate;
 }
 
-/*
-const float kC_p = 2.0; // Water type III
-const vec3 kWavelengths = vec3(680e-9, 550e-9, 440e-9);
-const vec3 K_d = vec3(0.54357, 0.120, 0.150);    // Ocean waters type III
-const vec3 kAbsorbCoef = K_d;
-
-const vec3 kScatterCoef = 0.219 * ( (-0.00113 * kWavelengths + 1.62517) /
-                                    (-0.00113 * 514e-9       + 1.62517) );
-
-//const vec3 kBackScatterCoef = 0.01829 * kScatterCoef + 0.00006;
-const vec3 kBackScatterCoef = 0.5 * vec3(0.1) + (
-        0.002 + 0.02 * ( 0.5 - 0.25 * ((1.0/log(10.0)) * log(kC_p)) ) *
-        ( 550.0e-9 / kWavelengths )
-    ) * 0.30 * pow(kC_p, 0.62);
-
-const vec3 kAttenCoef = kAbsorbCoef + kBackScatterCoef;
-*/
-
 /**
  * @brief Fresnel reflectance for unpolarized incident light
  *  holds for both air-incident and water-incident cases
