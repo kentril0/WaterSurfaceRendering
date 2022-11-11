@@ -66,6 +66,7 @@ private:
     void UpdateGui();
     void ShowStatusWindow() const;
     void ShowCameraSettings();
+    void ShowControlsWindow(bool* p_open) const;
 
 private:
     // TODO maybe into app
