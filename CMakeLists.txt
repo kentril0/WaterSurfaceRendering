@@ -5,7 +5,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(water VERSION 0.1 LANGUAGES CXX)
+project(water VERSION 1.0 LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
@@ -109,16 +109,53 @@ set(SHADERC_DIR "${LIBS_DIR}/shaderc")
 set(SHADERC_INCLUDE_DIR "${SHADERC_DIR}/libshaderc/include")
 set(SHADERC_BINARY_DIR  "${BUILD_DIR}/shaderc")
 
-set(SHADERC_SKIP_INSTALL ON CACHE INTERNAL "" FORCE)
-set(SHADERC_SKIP_TESTS   ON CACHE INTERNAL "" FORCE)
-set(SHADERC_SKIP_EXAMPLES   ON CACHE INTERNAL "" FORCE)
-set(SHADERC_SKIP_COPYRIGHT_CHECK   ON CACHE INTERNAL "" FORCE)
-
+set(SHADERC_SKIP_INSTALL            ON CACHE INTERNAL "" FORCE)
+set(SHADERC_SKIP_TESTS              ON CACHE INTERNAL "" FORCE)
+set(SHADERC_SKIP_EXAMPLES           ON CACHE INTERNAL "" FORCE)
+set(SHADERC_SKIP_COPYRIGHT_CHECK    ON CACHE INTERNAL "" FORCE)
 
 add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR})
 
 # TODO run ./utils/git-sync-deps to pull SPIRV-Tools into third_party/
 # https://github.com/google/shaderc/issues/1162
+
+# ----------------------------------------------------------
+# FFTW
+# http://www.fftw.org/
+
+set(FFTW_DIR         "${LIBS_DIR}/fftw")
+set(FFTW_INCLUDE_DIR "${FFTW_DIR}/api")
+set(FFTW_BINARY_DIR  "${BUILD_DIR}/fftw")
+
+include(FetchContent)
+
+FetchContent_Populate(fftw
+
+    TMP_DIR "${BUILD_DIR}/temp"
+    DOWNLOAD_DIR "${BUILD_DIR}/download"
+    SOURCE_DIR "${FFTW_DIR}"
+
+    URL "http://fftw.org/fftw-3.3.10.tar.gz"
+    URL_MD5 "8ccbf6a5ea78a16dbc3e1306e234cc5c"
+)
+
+set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "" FORCE)
+set(BUILD_TESTS       OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_OPENMP     OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_THREADS    OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_FLOAT      ON  CACHE INTERNAL "" FORCE)
+set(ENABLE_SSE        OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_SSE2       OFF CACHE INTERNAL "" FORCE)
+set(ENABLE_AVX        ON  CACHE INTERNAL "" FORCE)
+set(ENABLE_AVX2       OFF CACHE INTERNAL "" FORCE)
+
+add_subdirectory(${FFTW_DIR} ${FFTW_BINARY_DIR})
+
+#===============================================================================
+# OpenMP
+
+#find_package(OpenMP REQUIRED)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 # ==============================================================================
 # Header-only
@@ -152,6 +189,7 @@ set(MAIN_SCENE_DIR "${MAIN_DIR}/scene")
 # TODO file(GLOB sources *.cpp)
 set(MAIN_SOURCES 
     "${MAIN_CORE_DIR}/Log.cpp"
+    "${MAIN_CORE_DIR}/Profile.cpp"
     "${MAIN_VULKAN_DIR}/utils.cpp"
     "${MAIN_VULKAN_DIR}/Instance.cpp"
     "${MAIN_VULKAN_DIR}/PhysicalDevice.cpp"
@@ -174,6 +212,9 @@ set(MAIN_SOURCES
     "${MAIN_CORE_DIR}/Window.cpp"
     "${MAIN_DIR}/Gui.cpp"
     "${MAIN_CORE_DIR}/Application.cpp"
+    "${MAIN_SCENE_DIR}/Camera.cpp"
+    "${MAIN_SCENE_DIR}/WaterSurfaceMesh.cpp"
+    "${MAIN_SCENE_DIR}/WSTessendorf.cpp"
     "${MAIN_DIR}/WaterSurface.cpp"
     "${MAIN_DIR}/main.cpp"
 )
@@ -190,6 +231,7 @@ target_include_directories(${PROJECT_NAME}
             ${STB_INCLUDE_DIR}
             ${IMGUI_INCLUDE_DIR}
             ${SHADERC_INCLUDE_DIR}
+            ${FFTW_INCLUDE_DIR}
 )
 
 add_dependencies(${PROJECT_NAME}
@@ -204,6 +246,8 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE spdlog::spdlog
     PRIVATE imgui
     PRIVATE shaderc
+    PRIVATE fftw3f
+    #PRIVATE OpenMP::OpenMP_CXX
 )
 
 target_precompile_headers(${PROJECT_NAME}

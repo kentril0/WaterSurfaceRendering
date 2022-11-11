@@ -14,7 +14,7 @@
 namespace vkp
 {
 
-    Texture3D::Texture3D(Device& device)
+    Texture3D::Texture3D(const Device& device)
         : m_Device(device),
           m_Image(device),
           m_ImageView(device),

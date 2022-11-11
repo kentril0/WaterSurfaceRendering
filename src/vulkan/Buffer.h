@@ -19,7 +19,7 @@ namespace vkp
     {
     public:
         /** @brief Initializes members for subsequent buffer creation */
-        Buffer(Device& device);
+        Buffer(const Device& device);
 
         /**
          * @brief Destroys the buffer handle, unmaps its memory (if mapped),
@@ -38,20 +38,6 @@ namespace vkp
             other.m_BufferMemory = VK_NULL_HANDLE;
             other.m_MapAddr = nullptr;
             other.m_BufferView = VK_NULL_HANDLE;
-        }
-
-        Buffer& operator=(Buffer&& other)
-        {
-            m_Device = other.m_Device;
-            m_Buffer = other.m_Buffer;
-            other.m_Buffer = VK_NULL_HANDLE;
-            m_BufferMemory = other.m_BufferMemory;
-            other.m_BufferMemory = VK_NULL_HANDLE;
-            m_MapAddr = other.m_MapAddr;
-            other.m_MapAddr = nullptr;
-            m_BufferView = other.m_BufferView;
-            other.m_BufferView = VK_NULL_HANDLE;
-            return *this;
         }
 
         operator VkBuffer() const { return m_Buffer; }
@@ -125,7 +111,7 @@ namespace vkp
          * @return Result of the mapping call
          */
         VkResult Map(void** ppData,
-                     VkDeviceSize size = VK_WHOLE_SIZE, 
+                     VkDeviceSize size = VK_WHOLE_SIZE,
                      VkDeviceSize offset = 0);
 
         void* GetMappedAddress() const { return m_MapAddr; }
@@ -141,7 +127,8 @@ namespace vkp
          * @param destAddr Optional custom address in the buffer's mapped region
          *  to start copying to, if nullptr then the mapped address is used
          */
-        void CopyToMapped(const void* srcData, VkDeviceSize size,
+        void CopyToMapped(const void* srcData,
+                          VkDeviceSize size,
                           void* destAddr = nullptr);
 
         /**
@@ -194,7 +181,7 @@ namespace vkp
         void Destroy();
 
     private:
-        Device& m_Device;
+        const Device& m_Device;
 
         VkBuffer       m_Buffer       { VK_NULL_HANDLE };
         VkDeviceMemory m_BufferMemory { VK_NULL_HANDLE };

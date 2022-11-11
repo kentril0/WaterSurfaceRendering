@@ -134,7 +134,8 @@ namespace vkp
                 imageInfo.pQueueFamilyIndices = queueFamilies;
             }
 
-            imageInfo.initialLayout = m_ImageLayout;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            m_ImageLayout = imageInfo.initialLayout;
 
             VKP_ASSERT_RESULT(
                 vkCreateImage(m_Device, &imageInfo, nullptr, &m_Image));
@@ -195,10 +196,10 @@ namespace vkp
     }
 
     void Image::TransitionLayout_DST_OPTIMALtoSHADER_READ(
-        VkCommandBuffer cmdBuffer, VkPipelineStageFlags dstStage)
+        VkCommandBuffer cmdBuffer, VkPipelineStageFlags dstStage,
+        VkAccessFlags dstAccessMask
+    )
     {
-        VKP_REGISTER_FUNCTION();
-        VKP_LOG_INFO("{} {}", dstStage, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         VKP_ASSERT(m_Image != VK_NULL_HANDLE && 
                    m_ImageLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -208,7 +209,7 @@ namespace vkp
             VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage,
             // wait for writes, before reads
             // srcAccessMask, dstAccessMask
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_TRANSFER_WRITE_BIT, dstAccessMask,
             // All writes must be AVAILABLE before layout change
             // >> Layout transition
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -239,7 +240,8 @@ namespace vkp
     }
 
     void Image::TransitionLayoutToDST_OPTIMAL(VkCommandBuffer cmdBuffer,
-        VkPipelineStageFlags stage)
+        VkPipelineStageFlags stage
+    )
     {
         switch(m_ImageLayout)
         {

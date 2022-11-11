@@ -9,6 +9,7 @@
 #include <imgui/imgui.h>
 
 #include "Gui.h"
+#include "core/Profile.h"
 
 
 WaterSurface::WaterSurface(AppCmdLineArgs args)
@@ -21,6 +22,8 @@ WaterSurface::WaterSurface(AppCmdLineArgs args)
     m_Requirements.deviceFeatures.samplerAnisotropy = VK_TRUE;
     m_Requirements.queueFamilies = { VK_QUEUE_GRAPHICS_BIT };
     m_Requirements.presentationSupport = true;
+
+    m_DepthTestingEnabled = true;
 }
 
 WaterSurface::~WaterSurface()
@@ -37,25 +40,81 @@ void WaterSurface::Start()
     CreateRenderPass();
     m_SwapChain->CreateFramebuffers(*m_RenderPass);
 
-    CreateDrawCommandPools();
+    const uint32_t kImageCount = m_SwapChain->GetImageCount();
+
+    CreateDrawCommandPools(kImageCount);
     CreateDrawCommandBuffers();
 
+    CreateDescriptorPool();
+
+    SetupAssets();
+}
+
+void WaterSurface::SetupAssets()
+{
     SetupGUI();
+
+    CreateCamera();
+    CreateWaterSurfaceMesh();
+}
+
+void WaterSurface::CreateWaterSurfaceMesh()
+{
+    m_WaterSurfaceMesh.reset(
+        new WaterSurfaceMesh(*m_Device, *m_DescriptorPool)
+    );
+
+    m_WaterSurfaceMesh->CreateRenderData(
+        *m_RenderPass,
+        m_SwapChain->GetImageCount(),
+        m_SwapChain->GetExtent(),
+        m_SwapChain->HasDepthAttachment()
+    );
+
+    auto& cmdBuffer = BeginOneTimeCommands();
+
+        m_WaterSurfaceMesh->Prepare(cmdBuffer);
+
+    EndOneTimeCommands(cmdBuffer);
+}
+
+void WaterSurface::OnFrameBufferResize(int width, int height)
+{
+    // Application
+
+    m_RenderPass->Destroy();
+    CreateRenderPass();
+    m_SwapChain->CreateFramebuffers(*m_RenderPass);
+
+    // Also destroyes all the draw command buffers
+    DestroyDrawCommandPools();
+
+    const uint32_t kImageCount = m_SwapChain->GetImageCount();
+
+    CreateDrawCommandPools(kImageCount);
+    CreateDrawCommandBuffers();
+
+    // Assets
+
+    m_WaterSurfaceMesh->CreateRenderData(
+        *m_RenderPass,
+        m_SwapChain->GetImageCount(),
+        m_SwapChain->GetExtent(),
+        m_SwapChain->HasDepthAttachment()
+    );
+
+    gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
+
+    m_Camera->SetAspectRatio(width / static_cast<float>(height));
 }
 
 void WaterSurface::Update(vkp::Timestep dt)
 {
-    gui::NewFrame();
-    {
-        if (!ImGui::Begin("Application Configuration"))
-        {
-            ImGui::End();
-            return;
-        }
+    UpdateGui();    // TODO wrong priority??
 
-        ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
-        ImGui::End();
-    }
+    UpdateCamera(dt);
+
+    m_WaterSurfaceMesh->Update(dt);
 }
 
 void WaterSurface::Render(
@@ -65,15 +124,24 @@ void WaterSurface::Render(
     std::vector<VkCommandBuffer>& buffersToSubmit)
 {
     auto& drawCmdPool = m_DrawCmdPools[frameIndex];
-    drawCmdPool->Reset();
+    drawCmdPool.Reset();
     
-    vkp::CommandBuffer& commandBuffer = drawCmdPool->Front();
+    vkp::CommandBuffer& commandBuffer = drawCmdPool.Front();
     commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
+        // Copy to water surface maps, update uniform buffers
+        m_WaterSurfaceMesh->PrepareRender(
+            frameIndex, commandBuffer,
+            m_Camera->GetViewMat(), m_Camera->GetProjMat(),
+            m_Camera->GetPosition()
+        );
+
         BeginRenderPass(
             commandBuffer,
             m_SwapChain->GetFramebuffer(frameIndex)
         );
+
+        m_WaterSurfaceMesh->Render(frameIndex, commandBuffer);
 
         gui::Render(commandBuffer);
 
@@ -85,26 +153,86 @@ void WaterSurface::Render(
     buffersToSubmit.push_back(commandBuffer);
 }
 
-void WaterSurface::BeginRenderPass(
-    VkCommandBuffer commandBuffer,
-    VkFramebuffer framebuffer)
+// =============================================================================
+// Create functions
+
+void WaterSurface::CreateRenderPass()
 {
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = *m_RenderPass;
-    renderPassInfo.framebuffer = framebuffer;
+    VKP_REGISTER_FUNCTION();
 
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+    m_RenderPass.reset(
+        new vkp::RenderPass(
+            *m_Device,
+            m_SwapChain->GetImageFormat(),
+            m_SwapChain->GetDepthAttachmentFormat())
+    );
 
-    renderPassInfo.clearValueCount = 
-        static_cast<uint32_t>(m_ClearValues.size());
-    renderPassInfo.pClearValues = m_ClearValues.data();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, 
-                         VK_SUBPASS_CONTENTS_INLINE);
+    m_RenderPass->Create(m_SwapChain->HasDepthAttachment());
 }
 
+void WaterSurface::CreateDrawCommandPools(const uint32_t kCount)
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_DrawCmdPools.reserve(kCount);
+
+    for (uint32_t i = 0; i < kCount; ++i)
+    {
+        m_DrawCmdPools.emplace_back(
+            *m_Device,
+            vkp::QFamily::Graphics,
+            VK_COMMAND_POOL_CREATE_TRANSIENT_BIT    // short-lived
+        );
+    }
+}
+
+void WaterSurface::CreateDrawCommandBuffers()
+{
+    VKP_REGISTER_FUNCTION();
+    const uint32_t kBuffersPerFrame = 1;
+
+    for (auto& pool : m_DrawCmdPools)
+    {
+        pool.AllocateCommandBuffers(kBuffersPerFrame);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Descriptors 
+
+void WaterSurface::CreateDescriptorPool()
+{
+    VKP_REGISTER_FUNCTION();
+
+    m_DescriptorPool = vkp::DescriptorPool::Builder(*m_Device)
+        .AddPoolSize(
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            m_SwapChain->GetImageCount() * 10
+        )
+        .AddPoolSize(
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            m_SwapChain->GetImageCount() * 10
+        )
+        .Build(m_SwapChain->GetImageCount());
+}
+
+// -----------------------------------------------------------------------------
+// Assets
+
+void WaterSurface::CreateCamera()
+{
+    const VkExtent2D kSwapChainExtent = m_SwapChain->GetExtent();
+
+    m_Camera = std::make_unique<vkp::Camera>(
+        kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height),
+        s_kCamStartPos
+    );
+    m_Camera->SetPitch(-60.0f);
+    m_Camera->SetYaw(90.0f);
+    m_Camera->SetFov(1.5);
+    m_Camera->SetNear(0.1f);
+    m_Camera->SetFar(1000.f);
+}
 
 void WaterSurface::SetupGUI()
 {
@@ -147,65 +275,36 @@ void WaterSurface::SetupGUI()
     gui::DestroyFontUploadObjects();
 }
 
-void WaterSurface::OnFrameBufferResize(int width, int height)
+// =============================================================================
+// Update functions
+
+void WaterSurface::BeginRenderPass(
+    VkCommandBuffer commandBuffer,
+    VkFramebuffer framebuffer)
 {
-    m_RenderPass->Destroy();
-    DestroyDrawCommandPools();
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = *m_RenderPass;
+    renderPassInfo.framebuffer = framebuffer;
 
-    CreateRenderPass();
-    m_SwapChain->CreateFramebuffers(*m_RenderPass);
-    CreateDrawCommandPools();
-    CreateDrawCommandBuffers();
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
 
-    gui::OnFramebufferResized(m_SwapChain->GetMinImageCount());
+    renderPassInfo.clearValueCount = 
+        static_cast<uint32_t>(m_ClearValues.size());
+    renderPassInfo.pClearValues = m_ClearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, 
+                         VK_SUBPASS_CONTENTS_INLINE);
 }
 
-void WaterSurface::CreateRenderPass()
+void WaterSurface::UpdateCamera(vkp::Timestep dt)
 {
-    VKP_REGISTER_FUNCTION();
-
-    m_RenderPass.reset(
-        new vkp::RenderPass(
-            *m_Device,
-            m_SwapChain->GetImageFormat(),
-            m_SwapChain->GetDepthAttachmentFormat())
-    );
-
-    m_RenderPass->Create(m_SwapChain->HasDepthAttachment());
+    m_Camera->Update(dt);
 }
 
-void WaterSurface::CreateDrawCommandPools()
-{
-    VKP_REGISTER_FUNCTION();
-    // A command pool for each frame that is going to reset its buffers 
-    //  every time
-    // TODO maybe on recreate
-    const uint32_t kImageCount = m_SwapChain->GetImageCount();
-
-    m_DrawCmdPools.reserve(kImageCount);
-
-    for (uint32_t i = 0; i < kImageCount; ++i)
-    {
-        m_DrawCmdPools.emplace_back(
-            std::make_unique<vkp::CommandPool>(
-                *m_Device,
-                vkp::QFamily::Graphics,
-                VK_COMMAND_POOL_CREATE_TRANSIENT_BIT    // short-lived
-            )
-        );
-    }
-}
-
-void WaterSurface::CreateDrawCommandBuffers()
-{
-    VKP_REGISTER_FUNCTION();
-    const uint32_t kBuffersPerFrame = 1;
-
-    for (auto& commandPool : m_DrawCmdPools)
-    {
-        commandPool->AllocateCommandBuffers(kBuffersPerFrame);
-    }
-}
+// =============================================================================
+// Destroy functions
 
 void WaterSurface::DestroyDrawCommandPools()
 {
@@ -213,3 +312,182 @@ void WaterSurface::DestroyDrawCommandPools()
     m_DrawCmdPools.clear();
 }
 
+// =============================================================================
+// Callbacks
+
+void WaterSurface::OnMouseMove(double xpos, double ypos)
+{
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseMove(xpos, ypos);
+    }
+}
+
+void WaterSurface::OnMousePressed(int button, int action, int mods)
+{
+    if (m_State == States::CameraControls)
+    {
+        m_Camera->OnMouseButton(button, action, mods);
+    }
+}
+
+void WaterSurface::OnKeyPressed(int key, int action, int mods)
+{
+    m_Camera->OnKeyPressed(key, action);
+
+    if (action == GLFW_RELEASE)
+    {
+        if (key == KeyHideGui)
+        {
+            m_State = m_State == States::GuiControls ? States::CameraControls
+                                                     : States::GuiControls;
+            m_Window->ShowCursor(m_State == States::GuiControls);
+        }
+    }
+}
+
+void WaterSurface::OnCursorEntered(int entered)
+{
+    m_Camera->OnCursorEntered(entered);
+}
+
+// =============================================================================
+// Gui functions
+
+void WaterSurface::UpdateGui()
+{
+    gui::NewFrame();
+
+    ShowStatusWindow();
+
+    static bool controlsOpened = true;
+    if (controlsOpened)
+        ShowControlsWindow(&controlsOpened);
+
+    if (m_State != States::GuiControls)
+        return;
+
+    if (!ImGui::Begin("Application Configuration"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::ColorEdit3("clear color", &(m_ClearValues[0].color.float32[0]));
+    if ( ImGui::Button("Open Controls window") )
+        controlsOpened = true;
+
+    ShowCameraSettings();
+    m_WaterSurfaceMesh->ShowGUISettings();
+
+    ImGui::End();
+}
+
+void WaterSurface::ShowControlsWindow(bool* p_open) const
+{
+    if ( !ImGui::Begin("Application Controls", p_open) )
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Global:");
+    ImGui::BulletText("ESC to show / hide Configuration menu");
+    ImGui::Separator();
+
+    ImGui::Text("Camera:");
+    ImGui::BulletText("When menu is hidden: use Mouse to pan.");
+    ImGui::BulletText("WASD keys to fly.");
+    ImGui::BulletText("Left Shift to speed up.");
+    ImGui::BulletText("Left Ctrl to slow down.");
+    ImGui::Separator();
+}
+
+void WaterSurface::ShowStatusWindow() const
+{
+    const float kIsControlsHidden =
+        static_cast<float>(m_State != States::GuiControls);
+    const float kAlphaValue = 0.1 * kIsControlsHidden + 
+                              1.0 * (1.0-kIsControlsHidden);
+    ImGui::SetNextWindowBgAlpha(kAlphaValue);
+
+    if (!ImGui::Begin("Application Metrics"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    // Show frametime and FPS
+    const ImGuiIO& io = ImGui::GetIO();
+    const float kFrameTime = 1000.0f / io.Framerate;
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+                kFrameTime, io.Framerate);
+
+    // Record frametimes
+    static const uint32_t kMaxFrameTimeCount = 256;
+    static std::vector<float> frameTimes(kMaxFrameTimeCount);
+    frameTimes.back() = kFrameTime;
+    std::copy(frameTimes.begin()+1, frameTimes.end(), frameTimes.begin());
+    
+    ImGui::PlotLines("Frame Times", frameTimes.data(), kMaxFrameTimeCount,
+                     0, NULL, FLT_MAX, FLT_MAX, ImVec2(0,60));
+
+    // Show profiling records
+    ImGui::NewLine();
+    ImGui::Text("Profiling data");
+    if ( ImGui::BeginTable("Profiling data", 2, ImGuiTableFlags_Resizable | 
+                                                ImGuiTableFlags_BordersOuter |
+                                                ImGuiTableFlags_BordersV) )
+    {
+        const auto& kRecords = vkp::Profile::GetRecordsFromLatest();
+        for (const auto& record : kRecords)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%.3f ms", record.duration);
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", record.name);
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::End();
+}
+
+void WaterSurface::ShowCameraSettings()
+{
+    if (ImGui::CollapsingHeader("Camera Settings"))
+    {
+        // Must be automatic variables, camera is controlled also using user input
+        glm::vec3 pos = m_Camera->GetPosition();
+        glm::vec3 front = m_Camera->GetFront();
+        float pitch = m_Camera->GetPitch();
+        float yaw = m_Camera->GetYaw();
+        float fov = m_Camera->GetFov();
+        float camNear = m_Camera->GetNear();
+        float camFar = m_Camera->GetFar();
+
+        if (ImGui::DragFloat3("Position", glm::value_ptr(pos), 0.1f))
+            m_Camera->SetPosition(pos);
+
+        ImGui::InputFloat3("Front", glm::value_ptr(front), "%.3f",
+                           ImGuiInputTextFlags_ReadOnly);
+
+        if (ImGui::SliderFloat("Pitch angle", &pitch, -89.f, 89.f, "%.0f deg"))
+            m_Camera->SetPitch(pitch);
+
+        if (ImGui::SliderFloat("Yaw angle", &yaw, 0.f, 360.f, "%.0f deg"))
+            m_Camera->SetYaw(yaw);
+
+        if (ImGui::SliderAngle("Field of view", &fov, 0.f, 120.f))
+            m_Camera->SetFov(fov);
+
+        if (ImGui::SliderFloat("Near plane", &camNear, 0.f, 10.f))
+            m_Camera->SetNear(camNear);
+
+        if (ImGui::SliderFloat("Far plane", &camFar, 1000.f, 10000.f))
+            m_Camera->SetFar(camFar);
+
+        ImGui::NewLine();
+    }
+}

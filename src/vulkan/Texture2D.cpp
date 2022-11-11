@@ -15,7 +15,7 @@
 namespace vkp
 {
 
-    Texture2D::Texture2D(Device& device)
+    Texture2D::Texture2D(const Device& device)
         : m_Device(device),
           m_Image(device),
           m_ImageView(device),
@@ -174,32 +174,34 @@ namespace vkp
 
     void Texture2D::CopyFromBuffer(VkCommandBuffer cmdBuffer,
                                    VkBuffer buffer, bool genMips,
-                                   VkPipelineStageFlags dstStage)
+                                   VkPipelineStageFlags dstStage,
+                                   uint32_t bufferOffset,
+                                   VkAccessFlags dstAccessMask)
     {
-        VKP_REGISTER_FUNCTION();
         m_Image.TransitionLayoutToDST_OPTIMAL(cmdBuffer, dstStage);
 
-        CopyBufferToImage(cmdBuffer, buffer);
+        CopyBufferToImage(cmdBuffer, buffer, bufferOffset);
 
         if (genMips && m_MipLevels > 1)
         {
-            GenerateMipmaps(cmdBuffer, dstStage);
+            GenerateMipmaps(cmdBuffer, dstStage); /// TODO dstAccessMask);
         }
         else
         {
             m_Image.TransitionLayout_DST_OPTIMALtoSHADER_READ(cmdBuffer,
-                                                              dstStage);
+                                                              dstStage,
+                                                              dstAccessMask);
         }
     }
 
     void Texture2D::CopyBufferToImage(VkCommandBuffer cmdBuffer,
-        VkBuffer buffer)
+        VkBuffer buffer, uint32_t offset)
     {
         VKP_ASSERT(m_Image.GetLayout() == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         // Buffer data at offset 0, tightly-packed to whole image
         VkBufferImageCopy region = {
-            .bufferOffset = 0,
+            .bufferOffset = offset,
             // Tightly packed data
             .bufferRowLength = 0,
             .bufferImageHeight = 0,

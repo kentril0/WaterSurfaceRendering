@@ -7,7 +7,15 @@
 #define WATER_SURFACE_RENDERING_WATER_SURFACE_H_
 
 #include "core/Application.h"
+
 #include "vulkan/RenderPass.h"
+#include "vulkan/Descriptors.h"
+#include "vulkan/ShaderModule.h"
+#include "vulkan/Pipeline.h"
+#include "vulkan/Texture2D.h"
+
+#include "scene/Camera.h"
+#include "scene/WaterSurfaceMesh.h"
 
 
 class WaterSurface : public vkp::Application
@@ -31,28 +39,77 @@ protected:
         std::vector<VkCommandBuffer>& buffersToSubmit) override;
 
     void OnFrameBufferResize(int width, int height) override;
+    void OnMouseMove(double xpos, double ypos) override;
+    void OnMousePressed(int button, int action, int mods) override;
+    void OnKeyPressed(int key, int action, int mods) override;
+    void OnCursorEntered(int entered) override;
 
 private:
-    void SetupGUI();
-    void CreateImGuiContext();
-
     void CreateRenderPass();
-    void CreateDrawCommandPools();
-    void CreateDrawCommandBuffers();
-
     void BeginRenderPass(VkCommandBuffer cmdBuffer,
                          VkFramebuffer framebuffer);
+
+    void CreateDrawCommandPools(const uint32_t count);
+    void CreateDrawCommandBuffers();
     void DestroyDrawCommandPools();
 
+    void CreateDescriptorPool();
+
+    void SetupAssets();
+        void SetupGUI();
+        void CreateCamera();
+        void CreateWaterSurfaceMesh();
+
+    void UpdateCamera(vkp::Timestep dt);
+
+    // GUI:
+    void UpdateGui();
+    void ShowStatusWindow() const;
+    void ShowCameraSettings();
+    void ShowControlsWindow(bool* p_open) const;
+
 private:
-    std::unique_ptr<vkp::RenderPass> m_RenderPass;
+    // TODO maybe into app
+    std::unique_ptr<vkp::RenderPass> m_RenderPass{ nullptr };
 
-    std::vector< std::unique_ptr<vkp::CommandPool> > m_DrawCmdPools{ };
-
+    // TODO maybe into App
     std::array<VkClearValue, 2> m_ClearValues{
         VkClearValue{ 0.118f, 0.235f, 0.314f, 1.0f }, // clear color
         VkClearValue{ 1.0f, 0.0f, 0.0f, 0.0f }  // clear depth, stencil
     };
+
+    // TODO maybe into app
+    std::vector<vkp::CommandPool> m_DrawCmdPools;
+
+    std::unique_ptr<vkp::DescriptorPool> m_DescriptorPool{ nullptr };
+
+    // =========================================================================
+
+    /// @brief Application states
+    enum class States
+    {
+        GuiControls = 0,    ///< Gui is shown and captures mouse controls
+        CameraControls,     ///< Gui is hidden and camera captures mouse controls
+
+        TotalStates
+    };
+
+    States m_State{ States::GuiControls };  ///< Current application state
+
+    enum Controls
+    {
+        KeyHideGui = GLFW_KEY_ESCAPE,
+    };
+
+    // -------------------------------------------------------------------------
+    // Assets
+
+    std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
+    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 340.f, -420.f };
+
+    // Water Surfaces
+    std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };
+
 };
 
 #endif // WATER_SURFACE_RENDERING_WATER_SURFACE_H_

@@ -31,6 +31,9 @@ namespace vkp
         operator VkPipeline() const { return m_Pipeline; }
         operator VkPipelineLayout() const { return m_PipelineLayout; }
 
+        VkPipeline GetPipeline() const { return m_Pipeline; }
+        VkPipelineLayout GetPipelineLayout() const { return m_PipelineLayout; }
+
         /**
          * @brief On any subsequent call creates a new pipeline and pipeline 
          *  layout from its own initialized data members and parameters.

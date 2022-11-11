@@ -26,7 +26,8 @@ namespace vkp
         return std::make_unique<DescriptorSetLayout>(m_Device, m_Bindings);
     }
 
-    DescriptorSetLayout::DescriptorSetLayout(Device& device, BindingMap bindings)
+    DescriptorSetLayout::DescriptorSetLayout(const Device& device,
+                                             BindingMap bindings)
         : m_Device(device),
           m_Bindings(bindings)
     {
@@ -56,6 +57,8 @@ namespace vkp
         VKP_REGISTER_FUNCTION();
         vkDestroyDescriptorSetLayout(m_Device, m_Layout, nullptr);
     }
+
+    // -------------------------------------------------------------------------
 
     DescriptorPool::Builder& DescriptorPool::Builder::AddPoolSize(
         VkDescriptorType descriptorType, uint32_t count)
@@ -136,8 +139,10 @@ namespace vkp
         vkResetDescriptorPool(m_Device, m_Pool, flags);
     }
 
-    DescriptorWriter::DescriptorWriter(DescriptorSetLayout& layout,
-                                       DescriptorPool& pool)
+    // -------------------------------------------------------------------------
+
+    DescriptorWriter::DescriptorWriter(const DescriptorSetLayout& layout,
+                                       const DescriptorPool& pool)
         : m_Layout(layout),
           m_Pool(pool)
     {

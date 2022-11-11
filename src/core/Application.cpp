@@ -6,6 +6,8 @@
 #include "pch.h"
 #include "core/Application.h"
 
+#include "core/Profile.h"
+
 
 namespace vkp
 {
@@ -34,14 +36,12 @@ namespace vkp
     void Application::Init()
     {
         VKP_REGISTER_FUNCTION();
-        Timer initTimer;       // TODO to profile
+        VKP_PROFILE_SCOPE("Initialization");
 
         SetupWindow();
         SetupVulkan();
 
         this->Start();
-
-        VKP_LOG_INFO("Initialization took: \"{}\" ms", initTimer.ElapsedMillis());
     }
 
     void Application::Loop()
@@ -322,6 +322,29 @@ namespace vkp
         // TODO only free the cmdBuffer
         m_TransferCmdPool->FreeCommandBuffers();
     }
+
+    std::vector<
+        std::shared_ptr<ShaderModule>
+    > Application::CreateShadersFromShaderInfos(
+            const ShaderInfo* kShaderInfos,
+            const uint32_t kShaderInfoCount) const
+    {
+        VKP_ASSERT(m_Device != nullptr && *m_Device != VK_NULL_HANDLE);
+
+        std::vector<
+            std::shared_ptr<ShaderModule>
+        > shaders(kShaderInfoCount, nullptr);
+
+        for (uint32_t i = 0; i < kShaderInfoCount; ++i)
+        {
+            shaders[i] = std::make_shared<ShaderModule>(
+                *m_Device, kShaderInfos[i]
+            );
+        }
+
+        return shaders;
+    }
+
 
     // =============================================================================
     // External Controls
