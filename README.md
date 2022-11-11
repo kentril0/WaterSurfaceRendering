@@ -15,35 +15,38 @@ For more info, see Section [How it Works](#how-it-works).
 
 |   |   |
 |---|---|
-|![alt text](docs/figures/1-latest-profile.png)|![alt text](docs/figures/2-close-up.png)|
+|![alt text](docs/figures/1-latest-profile.png)|![alt text](docs/figures/2-higher-waves.png)|
+|![alt text](docs/figures/5-close-clear.png)|![alt text](docs/figures/6-close-deep.png)|
 |![alt text](docs/figures/3-clearest-ocean-close.png)|![alt text](docs/figures/4-pigmented-clear.png)|
 
 Profiling window:
 
 ![alt text](docs/figures/profiling-window.png)
-Using i5-6200U (2-core, 4 threads) CPU with AVX and NVIDIA GT 940M, at 512x512 tile resolution the application runs at ~34 FPS. There is lot o room for optimization. 
+* Profiling data structure tracks the duration of each unique profiling record ordered by the most recently updated.
+* Using i5-6200U (2-core, 4 threads) CPU with AVX enabled and NVIDIA GT 940M, at 512x512 tile resolution the application runs at ~34 FPS. There is lot of room for optimization. 
 
 
 ### TODO: possible features in the future
 In no particular order:
-* Endless
+* Endless - solving the tiling artifacts
 * Gerstner waves model (in compute shaders?)
 * Rendering: Ray marched
 * Atmospheric model, e.g. Preetham [5]
 * LOD
 * Foam rendering
 * Caustics? terrain plane?
+* Optimization of wave generation, (compute shaders?)
 
 ## Dependencies
 * C++17 compilant compiler
 * CMake
 * Vulkan SDK
 
-### Libraries
+### Used Libraries
 * window abstraction: [GLFW3](https://github.com/glfw/glfw)
 * logging library: [SPDLOG](https://github.com/gabime/spdlog)
 * math library: [GLM](https://github.com/g-truc/glm)
-* gui library: [ImGui](https://github.com/ocornut/imgui/)
+* GUI library: [ImGui](https://github.com/ocornut/imgui/)
 * image loading library: [STB](https://github.com/nothings/stb)
 * shader tools (e.g. compilation): [Shaderc](https://github.com/google/shaderc)
 * FFT library: [FFTW](http://fftw.org/) version 3.3.10
@@ -63,16 +66,17 @@ $ ./water
 Water surface is represented using two 2D textures - height maps:
 * Displacement map: each sample contains horizontal displacements and vertical displacement (height),
 * Normal map: each sample contains slope, and displacement derivatives to compute the normal.
-These two textures are computed on CPU based on the Tessendorf's method of simulating ocean water [1] using FFTW library.
+
+These two textures are computed on CPU based on the Tessendorf's choppy waves method of simulating ocean surfrace [1] using FFTW library.
 
 ### Mesh
-A square grid of vertices is computed, with predefined resolution (number of vertices per side) and the distance between them.  
-This mesh is then rendered with the two textures bound. Vertex positions are displaced using the displacement map. Normals are obtained by sampling the normal map and computing the vertex' normal based on [1].
+A square grid of vertices is computed, with predefined resolution (number of vertices per side) and the distance between them. 
+This mesh is then rendered with the two textures bound. Vertex positions are displaced using the displacement map. Normals are obtained by sampling the normal map and computing the vertex' normal [1].
 
 ### Shading
 
 The color of the water surface is computed per fragment based on the methods in articles [2] and [3] with the use of geometrical (ray) optics equations mentioned in [4]. 
-In short: Rays are traced from the camera to each fragment on the water surface, the sky and sun contributions are computed, and then the ray gets refracted at the surface and is attenuated and scattered in the water. The final color is composited using Fresnel's formula.
+In short: Rays are traced from the camera to each fragment on the water surface. At the fragment's position, sky and sun contributions are computed. Then the ray gets refracted along the surface and it is attenuated and scattered in the water until it reaches an imaginary underwater ground plane at a certain depth. The final color is composited from these contributions using Fresnel's formula.
 
 Based on Tessendorf's notes [1], the amount of outgoing radiance $L$ from a fragment on the water surface (simply fragment) to the camera is computed in simplified terms as:
 ```math
