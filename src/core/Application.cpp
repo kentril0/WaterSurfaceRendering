@@ -6,6 +6,8 @@
 #include "pch.h"
 #include "core/Application.h"
 
+#include "core/Profile.h"
+
 
 namespace vkp
 {
@@ -34,14 +36,12 @@ namespace vkp
     void Application::Init()
     {
         VKP_REGISTER_FUNCTION();
-        Timer initTimer;       // TODO to profile
+        VKP_PROFILE_SCOPE("Initialization");
 
         SetupWindow();
         SetupVulkan();
 
         this->Start();
-
-        VKP_LOG_INFO("Initialization took: \"{}\" ms", initTimer.ElapsedMillis());
     }
 
     void Application::Loop()
