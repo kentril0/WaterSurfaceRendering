@@ -48,17 +48,16 @@ namespace vkp
 
     public:
         /**
-         * @brief Sets up the texture for subsequent creation with the
+         * @brief Sets up the texture resources for subsequent creation with the
          *  'Create' call. 
          * @param device Created logical device
          */
-        Texture2D(Device& device);
-
+        Texture2D(const Device& device);
         ~Texture2D(); 
 
         /**
-         * @brief Creates a texture with certain dimensions and format ready
-         *  for data to be copied into. No mipmapping
+         * @brief Creates a device local texture with dimensions and format,
+         *  in a state that is ready for transfer.
          * @param cmdBuffer Command buffer in recording state, for image
          *  layout transition to DST_OPTIMAL
          * @param width
@@ -109,7 +108,10 @@ namespace vkp
                             VkBuffer buffer,
                             bool genMips = true,
                             VkPipelineStageFlags dstStage = 
-                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                            uint32_t bufferOffset = 0,
+                            VkAccessFlags dstAccessMask =
+                                VK_ACCESS_SHADER_READ_BIT);
 
         /**
          * @brief Creates a 2D RGBA texture with pixels loaded from a file, 
@@ -131,6 +133,9 @@ namespace vkp
         void GenerateMipmaps(VkCommandBuffer cmdBuffer,
                              VkPipelineStageFlags dstStage =
                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+        uint32_t GetWidth() const { return m_Width; }
+        uint32_t GetHeight() const { return m_Height; }
 
         VkImageView GetImageView() const { return m_ImageView; }
         VkImage GetImage() const { return m_Image; }
@@ -201,7 +206,8 @@ namespace vkp
          * @param buffer Staging buffer filled with data
          */
         void CopyBufferToImage(VkCommandBuffer cmdBuffer,
-                               VkBuffer buffer);
+                               VkBuffer buffer,
+                               uint32_t bufferOffset = 0);
 
         bool DeviceSupportsFormatTilingFeatures(
             VkFormat format,
@@ -214,7 +220,7 @@ namespace vkp
         void ClearDirty() { m_IsDirty = false; }
 
     private:
-        Device& m_Device;
+        const Device& m_Device;
         std::string_view m_Filename;
 
         // ---------------------------------------------------------------------

@@ -6,11 +6,31 @@
 #ifndef WATER_SURFACE_RENDERING_GUI_H_
 #define WATER_SURFACE_RENDERING_GUI_H_
 
+#include <vector>
+#include <array>
+
 #include <vulkan/vulkan.h>
 
 
 namespace gui
 {
+    template<typename T, size_t S>
+    struct ValueStringArray
+    {
+        const std::array<T,S> types;
+        const std::array<const char*, S> strings;
+        inline constexpr T operator[](uint32_t i) const { return types[i]; }
+        inline constexpr operator auto() const { return strings; }
+        inline constexpr size_t size() const { return S; }
+        inline const auto begin() const { return cbegin(types); }
+        inline constexpr auto find(const T& e) const {
+            return std::find(cbegin(types), cend(types), e);
+        }
+        inline constexpr uint32_t GetIndex(const T& e) const {
+            return std::find(cbegin(types), cend(types), e) - begin();
+        }
+    };
+
     std::vector<VkDescriptorPoolSize> GetImGuiDescriptorPoolSizes();
 
     /**

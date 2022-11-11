@@ -98,15 +98,26 @@ namespace vkp
          * @brief Sascha Willems. Dynamic uniform buffers. 2020.
          *  Available at: https://github.com/SaschaWillems/Vulkan/tree/master/examples/dynamicuniformbuffer.
          */
-        size_t GetUniformBufferAlignment(size_t originalSize)
+        size_t GetUniformBufferAlignment(size_t originalSize) const
         {
-            size_t minUboAlignment = 
+            const size_t minUboAlignment = 
                 m_PhysicalDevice.GetMinUniformBufferOffsetAlignment();
             size_t alignedSize = originalSize;
             if (minUboAlignment > 0)
             {
                 alignedSize = (alignedSize + minUboAlignment - 1) &
                               ~(minUboAlignment - 1);
+            }
+            return alignedSize;
+        }
+
+        size_t GetNonCoherentAtomSizeAlignment(size_t originalSize) const
+        {
+            const size_t kAtomSize = m_PhysicalDevice.GetNonCoherentAtomSize();
+            size_t alignedSize = originalSize;
+            if (kAtomSize > 0)
+            {
+                alignedSize = (alignedSize + kAtomSize - 1) & ~(kAtomSize - 1);
             }
             return alignedSize;
         }
