@@ -23,14 +23,14 @@ layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 
 #define M_PI 3.14159265358979323846
 #define ONE_OVER_PI (1.0 / M_PI)
+
+// Water and Air indices of refraction
 #define WATER_IOR 1.33477
 #define AIR_IOR 1.0
 #define IOR_AIR2WATER (AIR_IOR / WATER_IOR)
 
 #define NORMAL_WORLD_UP vec3(0.0, 1.0, 0.0)
-#define TERRAIN_TOP_PLANE_HEIGHT -100.0
 
-//const vec4 kTerrainBoundPlane = vec4(NORMAL_WORLD_UP, TERRAIN_TOP_PLANE_HEIGHT);
 vec4 kTerrainBoundPlane = vec4(NORMAL_WORLD_UP, surface.terrainDepth);
 
 struct Ray
@@ -48,9 +48,10 @@ vec3 SkyColor(const in Ray ray)
 
 /**
  * @brief Intersects terrain from above its bounding plane
+ * @brief Finds an intersection point of ray with the terrain
  * @return Distance along the ray; positive if intersects, else negative
  */
-float IntersectGround(const in Ray ray)
+float IntersectTerrain(const in Ray ray)
 {
     return -( dot(ray.org, kTerrainBoundPlane.xyz) - kTerrainBoundPlane.w ) /
            dot(ray.dir, kTerrainBoundPlane.xyz);
@@ -61,7 +62,7 @@ vec3 TerrainNormal(const in vec2 p)
     return NORMAL_WORLD_UP;
 }
 
-vec3 TerrainColor(const in vec3 p)
+vec3 TerrainColor(const in vec2 p)
 {
     const vec3 kMate = vec3(0.964, 1.0, 0.824);
     return kMate;
@@ -77,9 +78,6 @@ vec3 TerrainColor(const in vec3 p)
  */
 float FresnelFull(in float theta_i, in float theta_t)
 {
-    //theta_i = max(theta_i, 0.0);
-    //theta_t = max(theta_t, 0.0);
-
     // Normally incident light
     if (theta_i <= 0.00001)
     {
@@ -94,40 +92,8 @@ float FresnelFull(in float theta_i, in float theta_t)
 
 vec3 Attenuate(const in float kDistance, const in float kDepth)
 {
-    return exp( -surface.absorpCoef * 0.1*kDistance -surface.scatterCoef * 0.1*kDepth);
-}
-
-/**
- * @param kNormal Normal vector at the fragment
- * @param kLightDir Unit vector pointing to the light at the fragment
- * @param kViewDir Unit vector pointing in the view direction (to the camera)
- */
-vec3 ComputeSunReflectedContrib(
-    const in vec3 kNormal,
-    const in vec3 kLightDir,
-    const in vec3 kViewDir
-)
-{           
-    const float kNormalDotLight = dot(kNormal, kLightDir);
-    const vec3 kReflectDir = reflect(-kLightDir, kNormal);
-
-            // diffuse
-    return surface.sunColor.a * surface.sunColor.rgb * kNormalDotLight +
-            // specular
-           surface.specularIntensity *
-            clamp( 
-                pow( 
-                    max( dot(kReflectDir, kViewDir), 0.0 ),
-                surface.specularHighlights)
-            , 0.0, 1.0) * surface.sunColor.a * surface.sunColor.rgb;
-}
-
-vec3 ComputeSkyContrib(
-    const in vec3 p_w,
-    const in vec3 kLightReflectDir
-)
-{
-    return SkyColor( Ray(p_w, kLightReflectDir) ) * surface.skyIntensity;
+    return exp(-surface.absorpCoef  * 0.1f * kDistance 
+               -surface.scatterCoef * 0.1f * kDepth);
 }
 
 /**
@@ -139,10 +105,6 @@ vec3 ComputeSkyContrib(
 vec3 RefractAirIncident(const in vec3 kIncident, const in vec3 kNormal)
 {
     return refract(kIncident, kNormal, IOR_AIR2WATER);
-    //const float n = IOR_AIR2WATER
-    //const float w = n * NdL;
-    //const float k = sqrt(1.0 + (w-n)*(w+n));
-    //const vec3 refractDir = (w - k)*kNormal - n*kLightDir;
 }
 
 /**
@@ -155,12 +117,9 @@ vec3 ComputeTerrainRadiance(
     const in vec3 p_g,
     const in vec3 kIncidentDir
 )
-{    
+{
     // TODO better TERRAIN COLOR
-    return TerrainColor(p_g) *
-            max(
-                dot(TerrainNormal(p_g.xz), -kIncidentDir),
-            0.0);
+    return TerrainColor(p_g.xz) * dot(TerrainNormal(p_g.xz), -kIncidentDir);
 }
 
 vec3 ComputeWaterSurfaceColor(
@@ -168,31 +127,49 @@ vec3 ComputeWaterSurfaceColor(
     const in vec3 p_w,
     const in vec3 kNormal)
 {
+    const vec3 kViewDir = vec3(-ray.dir);
     const vec3 kLightDir = normalize(surface.sunDir);
-    const vec3 kReflectDir = reflect(-kLightDir, kNormal);
-
-    const vec3 kViewDir = normalize(-ray.dir);
-
-    // Amount of light coming directly from the sun reflected to the camera
-    const vec3 L_s = ComputeSunReflectedContrib(kNormal, kLightDir, kViewDir);
 
     // Diffuse atmospheric skylight
-    const vec3 L_a = ComputeSkyContrib(p_w, kReflectDir);
+    vec3 L_a;
+    {
+        const vec3 kViewReflect = reflect(kViewDir, kNormal);
+        L_a = SkyColor(Ray(p_w, kViewReflect)) * surface.skyIntensity;
 
-    const vec3 kRefractDir = RefractAirIncident(kLightDir, kNormal);
+        // Sun diffuse contribution - hitting the surface directly
+        // TODO should be already in the sky model
+        const float kNormalDotLight = max(dot(kNormal, kLightDir), 0.0f);
+        L_a += surface.sunColor.a * surface.sunColor.rgb * kNormalDotLight;
+    }
+
+    // Amount of light coming directly from the sun reflected to the camera
+    vec3 L_s;
+    {
+        const vec3 kReflectDir = reflect(-kLightDir, kNormal);
+        const float specular = surface.specularIntensity *
+                clamp( 
+                    pow( 
+                        max( dot(kReflectDir, kViewDir), 0.0 ),
+                    surface.specularHighlights)
+                , 0.0, 1.0);
+
+        L_s = surface.sunColor.a * surface.sunColor.rgb * specular;
+    }
 
     // Light just below the surface transmitted through into the air
+    const vec3 kRefractDir = RefractAirIncident(-kLightDir, kNormal);
     vec3 L_u;
     {
         // Downwelling irradiance just below the water surface
         const vec3 E_d0 = M_PI*L_a + L_s;
 
         // Constant diffuse radiance just below the surface from sun and sky
-        const vec3 L_df0 = (0.33*surface.backscatterCoef) / surface.absorpCoef * (E_d0 * ONE_OVER_PI);
+        const vec3 L_df0 = (0.33*surface.backscatterCoef) /
+                            surface.absorpCoef * (E_d0 * ONE_OVER_PI);
 
         const Ray kRefractRay = Ray( p_w, kRefractDir );
 
-        const float t_g = IntersectGround(kRefractRay);
+        const float t_g = IntersectTerrain(kRefractRay);
         const vec3 p_g = kRefractRay.org + t_g * kRefractRay.dir;
         const vec3 L_g = ComputeTerrainRadiance(p_g, kRefractRay.dir);
 
