@@ -105,6 +105,7 @@ target_include_directories(imgui
 # https://github.com/google/shaderc
 # linking info: https://github.com/google/shaderc/blob/main/libshaderc/README.md
 
+
 set(SHADERC_DIR "${LIBS_DIR}/shaderc")
 set(SHADERC_INCLUDE_DIR "${SHADERC_DIR}/libshaderc/include")
 set(SHADERC_BINARY_DIR  "${BUILD_DIR}/shaderc")
@@ -114,10 +115,26 @@ set(SHADERC_SKIP_TESTS              ON CACHE INTERNAL "" FORCE)
 set(SHADERC_SKIP_EXAMPLES           ON CACHE INTERNAL "" FORCE)
 set(SHADERC_SKIP_COPYRIGHT_CHECK    ON CACHE INTERNAL "" FORCE)
 
-add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR})
+set(SPRIV_TOOLS_DIR "${SHADERC_DIR}/third_party/spirv-tools")
 
-# TODO run ./utils/git-sync-deps to pull SPIRV-Tools into third_party/
+# Run ./utils/git-sync-deps to pull SPIRV-Tools into third_party/
 # https://github.com/google/shaderc/issues/1162
+if(NOT EXISTS ${SPRIV_TOOLS_DIR})
+    message(STATUS "Missing spriv-tools. Synchronizing dependencies.")
+    execute_process(
+        COMMAND ./utils/git-sync-deps
+        WORKING_DIRECTORY ${SHADERC_DIR}
+        OUTPUT_FILE CMD_OUTPUT
+    )
+endif()
+
+set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE INTERNAL "" FORCE)
+set(SPIRV_TOOLS_BUILD_STATIC ON CACHE INTERNAL "" FORCE)
+set(SPIRV_SKIP_EXECUTABLES   ON CACHE INTERNAL "" FORCE)
+set(SPIRV_SKIP_TESTS         ON CACHE INTERNAL "" FORCE)
+set(SPIRV_CHECK_CONTEXT      OFF CACHE INTERNAL "" FORCE)
+
+add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR})
 
 # ----------------------------------------------------------
 # FFTW
