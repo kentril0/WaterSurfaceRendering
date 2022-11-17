@@ -387,7 +387,8 @@ void WaterSurfaceMesh::CreateUniformBuffers(const uint32_t kBufferCount)
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
         // Keep each buffer mapped
-        VKP_ASSERT_RESULT(m_UniformBuffers[i].Map());
+        auto err = m_UniformBuffers[i].Map();
+        VKP_ASSERT_RESULT(err);
     }
 }
 
