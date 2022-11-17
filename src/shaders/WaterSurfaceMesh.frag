@@ -125,7 +125,7 @@ vec3 ComputeWaterSurfaceColor(
         L_a = SkyColor(Ray(p_w, kViewReflect)) * surface.skyIntensity;
 
         // Sun diffuse contribution - hitting the surface directly
-        // TODO should be already in the sky model
+        // TODO should be already in the sky model?
         const float kNormalDotLight = max(dot(kNormal, kLightDir), 0.0f);
         L_a += surface.sunColor.a * surface.sunColor.rgb * kNormalDotLight;
     }
@@ -133,13 +133,25 @@ vec3 ComputeWaterSurfaceColor(
     // Amount of light coming directly from the sun reflected to the camera
     vec3 L_s;
     {
+    // Phong
+    #if 0
         const vec3 kReflectDir = reflect(-kLightDir, kNormal);
         const float specular = surface.specularIntensity *
-                clamp( 
-                    pow( 
+                clamp(
+                    pow(
                         max( dot(kReflectDir, kViewDir), 0.0 ),
                     surface.specularHighlights)
                 , 0.0, 1.0);
+    // Blinn-Phong - more accurate when compared to ocean sunset photos
+    #else
+        const vec3 kHalfWayDir = normalize(kLightDir + kViewDir);
+        const float specular = surface.specularIntensity *
+                clamp(
+                    pow(
+                        max( dot(kNormal, kHalfWayDir), 0.0 ),
+                    surface.specularHighlights)
+                , 0.0, 1.0);
+    #endif
 
         L_s = surface.sunColor.a * surface.sunColor.rgb * specular;
     }
@@ -149,7 +161,7 @@ vec3 ComputeWaterSurfaceColor(
     vec3 L_u;
     {
         // Downwelling irradiance just below the water surface
-        const vec3 E_d0 = M_PI*L_a + L_s;
+        const vec3 E_d0 = M_PI*L_a;
 
         // Constant diffuse radiance just below the surface from sun and sky
         const vec3 L_df0 = (0.33*surface.backscatterCoef) /
