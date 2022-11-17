@@ -233,7 +233,8 @@ namespace vkp
             isMinimized = width == 0 || height == 0;
         }
 
-        VKP_ASSERT_RESULT(m_Device->WaitIdle());
+        auto err = m_Device->WaitIdle();
+        VKP_ASSERT_RESULT(err);
 
         //m_RenderPass->Destroy();
         //DestroyDrawCommandPools();

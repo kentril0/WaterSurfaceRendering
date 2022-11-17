@@ -75,9 +75,9 @@ namespace vkp
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        VKP_ASSERT_RESULT(
-            vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule)
-        );
+        auto err = vkCreateShaderModule(m_Device, &createInfo, nullptr,
+                                        &shaderModule);
+        VKP_ASSERT_RESULT(err);
 
         return shaderModule;
     }
@@ -91,9 +91,9 @@ namespace vkp
         createInfo.pCode = code.data();
 
         VkShaderModule shaderModule;
-        VKP_ASSERT_RESULT(
-            vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule)
-        );
+        auto err = vkCreateShaderModule(m_Device, &createInfo, nullptr,
+                                        &shaderModule);
+        VKP_ASSERT_RESULT(err);
 
         return shaderModule;
     }

@@ -40,8 +40,8 @@ namespace vkp
     void Sampler::Create(const VkSamplerCreateInfo& info)
     {
         VKP_REGISTER_FUNCTION();
-        VKP_ASSERT_RESULT(
-            vkCreateSampler(m_Device, &info, nullptr, &m_Sampler));
+        auto err = vkCreateSampler(m_Device, &info, nullptr, &m_Sampler);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Sampler::Destroy()

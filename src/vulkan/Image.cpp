@@ -137,8 +137,8 @@ namespace vkp
             imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             m_ImageLayout = imageInfo.initialLayout;
 
-            VKP_ASSERT_RESULT(
-                vkCreateImage(m_Device, &imageInfo, nullptr, &m_Image));
+            auto err = vkCreateImage(m_Device, &imageInfo, nullptr, &m_Image);
+            VKP_ASSERT_RESULT(err);
         }
 
         AllocateMemory(memoryProps);
@@ -161,16 +161,16 @@ namespace vkp
                 memRequirements.memoryTypeBits, 
                 properties);
 
-        VKP_ASSERT_RESULT(
-            vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_ImageMemory));
+        auto err = vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_ImageMemory);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Image::BindMemory(VkDeviceSize offset)
     {
         VKP_ASSERT(m_Image != VK_NULL_HANDLE && 
                    m_ImageMemory != VK_NULL_HANDLE);
-        VKP_ASSERT_RESULT(
-            vkBindImageMemory(m_Device, m_Image, m_ImageMemory, offset));
+        auto err = vkBindImageMemory(m_Device, m_Image, m_ImageMemory, offset);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Image::TransitionLayout_UNDEFtoDST_OPTIMAL(VkCommandBuffer cmdBuffer)

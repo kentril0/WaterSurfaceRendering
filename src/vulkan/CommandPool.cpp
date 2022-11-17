@@ -37,8 +37,9 @@ namespace vkp
         poolInfo.queueFamilyIndex = m_QFamilyIndex;
         poolInfo.flags = flags;
 
-        VKP_ASSERT_RESULT(
-            vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool));
+        auto err =
+            vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool);
+        VKP_ASSERT_RESULT(err);
     }
 
     void CommandPool::AllocateCommandBuffers(uint32_t bufferCount, 
@@ -55,15 +56,17 @@ namespace vkp
         allocInfo.level = level;
         allocInfo.commandBufferCount = bufferCount;
 
-        VKP_ASSERT_RESULT(
+        auto err =
             vkAllocateCommandBuffers(m_Device, &allocInfo, 
-                                     ToVkBuffers(&m_CommandBuffers[kOldSize]))); 
+                                     ToVkBuffers(&m_CommandBuffers[kOldSize])
+        ); 
+        VKP_ASSERT_RESULT(err);
     }
 
     void CommandPool::Reset(VkCommandPoolResetFlags flags)
     {
-        VKP_ASSERT_RESULT(
-            vkResetCommandPool(m_Device, m_CommandPool, flags));
+        auto err = vkResetCommandPool(m_Device, m_CommandPool, flags);
+        VKP_ASSERT_RESULT(err);
     }
 
     void CommandPool::FreeCommandBuffers()

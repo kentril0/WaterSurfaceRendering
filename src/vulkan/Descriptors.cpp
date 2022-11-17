@@ -47,9 +47,10 @@ namespace vkp
         layoutInfo.bindingCount = static_cast<uint32_t>(bindingsArr.size());
         layoutInfo.pBindings = bindingsArr.data();
 
-        VKP_ASSERT_RESULT(
+        auto err =
             vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr,
-                                        &m_Layout));
+                                        &m_Layout);
+        VKP_ASSERT_RESULT(err);
     }
 
     DescriptorSetLayout::~DescriptorSetLayout()
@@ -97,9 +98,9 @@ namespace vkp
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
 
-        VKP_ASSERT_RESULT(
-            vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, 
-                                   &m_Pool));
+        auto err = vkCreateDescriptorPool(m_Device, &poolInfo, nullptr,
+                                          &m_Pool);
+        VKP_ASSERT_RESULT(err);
     }
 
     DescriptorPool::~DescriptorPool()

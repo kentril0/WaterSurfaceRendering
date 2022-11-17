@@ -17,12 +17,14 @@ namespace vkp
         beginInfo.flags = flags;
         beginInfo.pInheritanceInfo = inheritInfo;
 
-        VKP_ASSERT_RESULT(vkBeginCommandBuffer(buffer, &beginInfo));
+        auto err = vkBeginCommandBuffer(buffer, &beginInfo);
+        VKP_ASSERT_RESULT(err);
     }
 
     void CommandBuffer::End()
     {
-        VKP_ASSERT_RESULT(vkEndCommandBuffer(buffer));
+        auto err = vkEndCommandBuffer(buffer);
+        VKP_ASSERT_RESULT(err);
     }
 
     void CommandBuffer::Reset()
