@@ -343,6 +343,14 @@ void WaterSurface::OnKeyPressed(int key, int action, int mods)
                                                      : States::GuiControls;
             m_Window->ShowCursor(m_State == States::GuiControls);
         }
+        else if (key == KeyRecompileShaders)
+        {
+            m_WaterSurfaceMesh->RecompileShaders(
+                *m_RenderPass,
+                m_SwapChain->GetExtent(),
+                m_SwapChain->HasDepthAttachment()
+            );
+        }
     }
 }
 

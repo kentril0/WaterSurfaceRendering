@@ -24,6 +24,8 @@
 
 /**
  * EXPERIMENTAL
+ *  FIXME: incorrect layout when changing to uninitialized frame map pair without animation on
+ *  TODO: should be on dedicated thread
  * @brief Enable for double buffered textures: two sets of textures, one used for
  *  copying to, the other for rendering to, at each frame they are swapped.
  * For the current use-case, the performance might be slightly worse.
@@ -56,8 +58,7 @@ public:
         VkRenderPass renderPass,
         const uint32_t kImageCount,
         const VkExtent2D kFramebufferExtent,
-        const bool kFramebufferHasDepthAttachment
-    );
+        const bool kFramebufferHasDepthAttachment);
 
     void Prepare(VkCommandBuffer cmdBuffer);
 
@@ -68,16 +69,19 @@ public:
         VkCommandBuffer cmdBuffer,
         const glm::mat4& viewMat,
         const glm::mat4& projMat,
-        const glm::vec3& camPos
-    );
+        const glm::vec3& camPos);
  
     void Render(
         const uint32_t frameIndex,
-        VkCommandBuffer cmdBuffer
-    );
+        VkCommandBuffer cmdBuffer);
 
     // @pre Called inside ImGui Window scope
     void ShowGUISettings();
+
+    void RecompileShaders(
+        VkRenderPass renderPass,
+        const VkExtent2D kFramebufferExtent,
+        const bool kFramebufferHasDepthAttachment);
 
 private:
     // TODO batch 
@@ -126,11 +130,7 @@ private:
         const VkFormat kMapFormat,
         const bool kUseMipMapping);
 
-    struct FrameMapData
-    {
-        std::unique_ptr<vkp::Texture2D> displacementMap{ nullptr };
-        std::unique_ptr<vkp::Texture2D> normalMap{ nullptr };
-    };
+    struct FrameMapData;
 
     void UpdateFrameMaps(
         VkCommandBuffer cmdBuffer,
@@ -219,6 +219,12 @@ private:
 
     std::unique_ptr<vkp::Buffer> m_StagingBuffer{ nullptr };
 
+    struct FrameMapData
+    {
+        std::unique_ptr<vkp::Texture2D> displacementMap{ nullptr };
+        std::unique_ptr<vkp::Texture2D> normalMap{ nullptr };
+    };
+
     struct FrameMapPair
     {
     #ifndef DOUBLE_BUFFERED
@@ -236,6 +242,8 @@ private:
 #ifdef DOUBLE_BUFFERED
     uint32_t m_FrameMapIndex{ 0 };      ///< Swap index
 #endif
+    // Whether the frame maps need to update after resolution has been changed
+    bool m_FrameMapNeedsUpdate{ false };
 
     // -------------------------------------------------------------------------
     // Uniform buffers data
@@ -254,10 +262,10 @@ private:
         alignas(16) glm::vec3 camPos;
         alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
         //                    vec4(vec3(suncolor), sunIntensity)
-        alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
+        alignas(16) glm::vec4 sunColor   { 0.7, 0.45, 0.3, 1.0 };
         float terrainDepth{ -999.0};
         float skyIntensity{ 1.0 };
-        float specularIntensity{ 0.6 };
+        float specularIntensity{ 10.0 };
         float specularHighlights{ 32.0 };
         alignas(16) glm::vec3 absorpCoef;
         alignas(16) glm::vec3 scatterCoef;
