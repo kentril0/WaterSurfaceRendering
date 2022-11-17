@@ -144,7 +144,7 @@ void WaterSurfaceMesh::PrepareModelTess(VkCommandBuffer cmdBuffer)
 
 void WaterSurfaceMesh::Update(float dt)
 {
-    if (m_PlayAnimation)
+    if (m_PlayAnimation || m_FrameMapNeedsUpdate)
     {
         m_TimeCtr += dt * m_AnimSpeed;
 
@@ -185,18 +185,21 @@ void WaterSurfaceMesh::PrepareRender(
     UpdateDescriptorSet(frameIndex);
 
 #ifndef DOUBLE_BUFFERED
-    UpdateFrameMaps(
-        cmdBuffer,
-        m_CurFrameMap->data[0]
-    );
+    const uint32_t kTransferIndex = 0;
 #else
-    uint32_t transferIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
-
-    UpdateFrameMaps(
-        cmdBuffer,
-        m_CurFrameMap->data[transferIndex]
-    );
+    const uint32_t kTransferIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
 #endif
+
+    // No need to update the texture with the same data over again
+    if (m_PlayAnimation || m_FrameMapNeedsUpdate)
+    {
+        UpdateFrameMaps(
+            cmdBuffer,
+            m_CurFrameMap->data[kTransferIndex]
+        );
+
+        m_FrameMapNeedsUpdate = false;
+    }
 }
 
 void WaterSurfaceMesh::Render(
@@ -228,8 +231,11 @@ void WaterSurfaceMesh::Render(
     m_Mesh->Render(cmdBuffer);
 
 #ifdef DOUBLE_BUFFERED
-    m_FrameMapIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
-    SetDescriptorSetsDirty();
+    if (m_PlayAnimation)
+    {
+        m_FrameMapIndex = (m_FrameMapIndex + 1) % m_CurFrameMap->data.size();
+        SetDescriptorSetsDirty();
+    }
 #endif
 }
 
@@ -858,6 +864,7 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
                 m_ModelTess->SetDamping(damping);
 
                 m_ModelTess->Prepare();
+                m_FrameMapNeedsUpdate = true;
             }
 
             m_ModelTess->SetLambda(lambda);
