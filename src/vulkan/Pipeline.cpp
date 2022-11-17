@@ -87,9 +87,9 @@ namespace vkp
             VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 
         VkPipelineCache pipelineCache;
-	    VKP_ASSERT_RESULT(
-            vkCreatePipelineCache(m_Device, &pipelineCacheCreateInfo, nullptr, 
-                                  &pipelineCache));
+        auto err = vkCreatePipelineCache(m_Device, &pipelineCacheCreateInfo,
+                                         nullptr, &pipelineCache);
+        VKP_ASSERT_RESULT(err);
         return pipelineCache;
     }
 
@@ -119,9 +119,9 @@ namespace vkp
     VkPipelineLayout Pipeline::CreatePipelineLayout()
     {
         VkPipelineLayout pipelineLayout;
-        VKP_ASSERT_RESULT(
-            vkCreatePipelineLayout(m_Device, &m_PipelineLayoutInfo, nullptr, 
-                                   &pipelineLayout));
+        auto err = vkCreatePipelineLayout(m_Device, &m_PipelineLayoutInfo,
+                                          nullptr, &pipelineLayout);
+        VKP_ASSERT_RESULT(err);
         return pipelineLayout;
     }
 
@@ -153,9 +153,9 @@ namespace vkp
         //  Create just 1 graphics pipeline
         //      No VkPipelineCache object TODO
         VkPipeline pipeline;
-        VKP_ASSERT_RESULT(
-            vkCreateGraphicsPipelines(m_Device, m_PipelineCache, 1, 
-                                      &pipelineInfo, nullptr, &pipeline));
+        auto err = vkCreateGraphicsPipelines(m_Device, m_PipelineCache, 1,
+                                             &pipelineInfo, nullptr, &pipeline);
+        VKP_ASSERT_RESULT(err);
         return pipeline;
     }
 
@@ -181,11 +181,10 @@ namespace vkp
         createInfo.basePipelineHandle = VK_NULL_HANDLE;
 
         VkPipeline pipeline;
-        VKP_ASSERT_RESULT(
-            vkCreateComputePipelines(m_Device, m_PipelineCache,
-                                     1, &createInfo, nullptr,
-                                     &pipeline)
-        );
+        auto err = vkCreateComputePipelines(m_Device, m_PipelineCache,
+                                            1, &createInfo, nullptr,
+                                            &pipeline);
+        VKP_ASSERT_RESULT(err);
         return pipeline;
     }
 

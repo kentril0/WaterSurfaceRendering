@@ -9,15 +9,12 @@
 #include "core/Log.h"
 #include <filesystem>
 
-#ifdef VKP_DEBUG
+#ifdef VKP_ENABLE_ASSERTS
     // TODO other platforms, like windows: __debugbreak()
     #include <signal.h>
     #define VKP_DEXIT() raise(SIGTRAP)
-#else
-    #define VKP_DEXIT()
-#endif
+    #define VKP_ASSERT_LOGGER() ::vkp::Log::GetAssertLogger()
 
-#ifdef VKP_ENABLE_ASSERTS
     /**
      * @brief Assert macro. Prints default message
      *  when 'check' does NOT hold
@@ -36,9 +33,15 @@
         SPDLOG_LOGGER_CRITICAL(VKP_ASSERT_LOGGER(), __VA_ARGS__);  \
         VKP_DEXIT(); } }
 
+    #define VKP_ASSERT_RESULT(st) VKP_ASSERT((st) == VK_SUCCESS)
+    #define VKP_ASSERT_RESULT_MSG(st, msg) VKP_ASSERT_MSG((st) == VK_SUCCESS, msg)
 #else
+    #define VKP_DEXIT()
+    #define VKP_ASSERT_LOGGER()
     #define VKP_ASSERT(...)
     #define VKP_ASSERT_MSG(...)
-#endif // VKP_ENABLE_ASSERTS
+    #define VKP_ASSERT_RESULT(...)
+    #define VKP_ASSERT_RESULT_MSG(...)
+#endif // ifdef VKP_ENABLE_ASSERTS
 
 #endif // WATER_SURFACE_RENDERING_CORE_ASSERT_H_

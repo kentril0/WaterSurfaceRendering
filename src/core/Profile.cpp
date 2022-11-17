@@ -17,7 +17,7 @@ namespace vkp
         InternalRecord* head = s_LatestRecord;
         while (head != nullptr)
         {
-            records.emplace_back(head->name, head->duration);
+            records.emplace_back(head->name, head->duration, head->fileName);
             head = head->prev;
         }
 
@@ -26,18 +26,13 @@ namespace vkp
 
     void Profile::InsertRecord(const Record& r)
     {
-        InsertRecord(r.name, r.duration);
-    }
-
-    void Profile::InsertRecord(const char* desc, float val)
-    {
-        InternalRecord record{ desc, val };
+        InternalRecord record(r);
 
         if (s_LatestRecord != nullptr && *s_LatestRecord == record)
             s_LatestRecord->duration = record.duration;
         else
         {
-            auto [pair, inserted] = s_Records.try_emplace(desc, record);
+            auto [pair, inserted] = s_Records.try_emplace(r.name, record);
             auto& it = pair->second;
             if (!inserted)
             {

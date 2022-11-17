@@ -14,9 +14,13 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+option(VKP_ENABLE_PROFILING "Enable recording of profiling data" ON)
+option(VKP_ENABLE_LOGGING "Enable debug logging" ON)
+option(VKP_ENABLE_ASSERTS "Enable assertions" ON)
+
 # ------------------------------------------------------------------------------
 # Setup directories
-SET(BUILD_DIR "${CMAKE_BINARY_DIR}")
+set(BUILD_DIR "${CMAKE_BINARY_DIR}")
 set(LIBS_DIR "${CMAKE_SOURCE_DIR}/libs")
 set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
 set(SHADERS_DIR "${SRC_DIR}/shaders")
@@ -51,12 +55,12 @@ set(GLFW_DIR "${LIBS_DIR}/glfw")
 set(GLFW_INCLUDE_DIR "${GLFW_DIR}/include")
 set(GLFW_BINARY_DIR "${BUILD_DIR}/glfw")
 
-option(GLFW_LIBRARY_TYPE "STATIC")
-option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)
-option(GLFW_BUILD_TESTS "Build the GLFW test programs" OFF)
-option(GLFW_BUILD_DOCS "Build the GLFW documentation" OFF)
-option(GLFW_INSTALL "Generate installation target" OFF)
-option(GLFW_DOCUMENT_INTERNALS "Include internals in documentation" OFF)
+set(GLFW_LIBRARY_TYPE "STATIC" CACHE INTERNAL "" FORCE)
+set(GLFW_BUILD_EXAMPLES     OFF CACHE INTERNAL "" FORCE)
+set(GLFW_BUILD_TESTS        OFF CACHE INTERNAL "" FORCE)
+set(GLFW_BUILD_DOCS         OFF CACHE INTERNAL "" FORCE)
+set(GLFW_INSTALL            OFF CACHE INTERNAL "" FORCE)
+set(GLFW_DOCUMENT_INTERNALS OFF CACHE INTERNAL "" FORCE)
 
 add_subdirectory(${GLFW_DIR} ${GLFW_BINARY_DIR} EXCLUDE_FROM_ALL)
 
@@ -128,13 +132,13 @@ if(NOT EXISTS ${SPRIV_TOOLS_DIR})
     )
 endif()
 
-set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE INTERNAL "" FORCE)
-set(SPIRV_TOOLS_BUILD_STATIC ON CACHE INTERNAL "" FORCE)
-set(SPIRV_SKIP_EXECUTABLES   ON CACHE INTERNAL "" FORCE)
-set(SPIRV_SKIP_TESTS         ON CACHE INTERNAL "" FORCE)
+set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE INTERNAL  "" FORCE)
+set(SPIRV_TOOLS_BUILD_STATIC ON CACHE INTERNAL  "" FORCE)
+set(SPIRV_SKIP_EXECUTABLES   ON CACHE INTERNAL  "" FORCE)
+set(SPIRV_SKIP_TESTS         ON CACHE INTERNAL  "" FORCE)
 set(SPIRV_CHECK_CONTEXT      OFF CACHE INTERNAL "" FORCE)
 
-add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR})
+add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR} EXCLUDE_FROM_ALL)
 
 # ----------------------------------------------------------
 # FFTW
@@ -271,8 +275,19 @@ target_precompile_headers(${PROJECT_NAME}
     PRIVATE "${SRC_DIR}/pch.h"
 )
 
-target_compile_options(${PROJECT_NAME}
-    PRIVATE "-DVKP_DEBUG"
+set(VKP_DEFINITIONS)
+if(VKP_ENABLE_LOGGING)
+    set(VKP_DEFINITIONS "${VKP_DEFINITIONS} -DVKP_DEBUG")
+endif()
+if(VKP_ENABLE_PROFILING)
+    set(VKP_DEFINITIONS "${VKP_DEFINITIONS} -DVKP_PROFILE")
+endif()
+if(VKP_ENABLE_ASSERTS)
+    set(VKP_DEFINITIONS "${VKP_DEFINITIONS} -DVKP_ENABLE_ASSERTS")
+endif()
+
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    COMPILE_FLAGS "${VKP_DEFINITIONS}"
 )
 
 #--------------------------------------------------------------------------------

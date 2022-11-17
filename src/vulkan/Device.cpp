@@ -282,9 +282,9 @@ namespace vkp
 
         VkDescriptorPool descriptorPool;
 
-        VKP_ASSERT_RESULT(
-            vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, 
-                                   &descriptorPool));
+        auto err = vkCreateDescriptorPool(m_Device, &poolInfo, nullptr,
+                                          &descriptorPool);
+        VKP_ASSERT_RESULT(err);
 
         // Save for deallocation
         m_DescriptorPools.push_back(descriptorPool);

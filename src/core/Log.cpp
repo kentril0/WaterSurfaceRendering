@@ -16,25 +16,23 @@ namespace vkp
 
     void Log::Init()
     {
+    #if defined(VKP_DEBUG) || defined(VKP_ASSERT)
         spdlog::set_level(spdlog::level::trace);
+    #endif // ifdef VKP_DEBUG || VKP_ASSERT
 
+        // TODO to file also
+    #ifdef VKP_DEBUG
         s_Logger = spdlog::stdout_color_mt("VKP");
         // TODO expose level later
         s_Logger->set_level(spdlog::level::trace);
         s_Logger->set_pattern("%^[%T]: %v%$");
+    #endif
 
-        // TODO to file also
-
+    #ifdef VKP_ASSERT
         s_AssertLogger = spdlog::stdout_color_mt("VKPA");
         s_AssertLogger->set_level(spdlog::level::trace);
         s_AssertLogger->set_pattern("%^[%T]: %s:%#:%!() %v%$");
-
-        //s_Logger = std::make_shared<spdlog::logger>("VKPP");
-        //spdlog::register_logger(s_Logger);
-
-        // TODOD when outputting to a file
-        //s_ProfileLogger->flush_on(spdlog::level::trace);
-
+    #endif
     }
 
 } // namespace vkp 

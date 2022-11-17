@@ -44,8 +44,8 @@ namespace vkp
         bufferInfo.sharingMode = sharingMode;
         bufferInfo.flags = 0;
 
-        VKP_ASSERT_RESULT(
-            vkCreateBuffer(m_Device, &bufferInfo, nullptr, &m_Buffer));
+        auto err = vkCreateBuffer(m_Device, &bufferInfo, nullptr, &m_Buffer);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Buffer::AllocateMemory(VkMemoryPropertyFlags properties)
@@ -66,8 +66,9 @@ namespace vkp
                 memRequirements.memoryTypeBits, 
                 properties);
 
-        VKP_ASSERT_RESULT(
-            vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_BufferMemory));
+        auto err =
+            vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_BufferMemory);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Buffer::Bind(VkDeviceSize offset) const
@@ -76,8 +77,9 @@ namespace vkp
         VKP_ASSERT(m_Buffer != VK_NULL_HANDLE &&
                         m_BufferMemory != VK_NULL_HANDLE);
 
-        VKP_ASSERT_RESULT(
-            vkBindBufferMemory(m_Device, m_Buffer, m_BufferMemory, offset));
+        auto err =
+            vkBindBufferMemory(m_Device, m_Buffer, m_BufferMemory, offset);
+        VKP_ASSERT_RESULT(err);
     }
 
     VkResult Buffer::Fill(const void* data, VkDeviceSize size)
@@ -192,9 +194,8 @@ namespace vkp
         info.offset = offset;
         info.range = range;
 
-        VKP_ASSERT_RESULT(
-            vkCreateBufferView(m_Device, &info, nullptr, &m_BufferView)
-        );
+        auto err = vkCreateBufferView(m_Device, &info, nullptr, &m_BufferView);
+        VKP_ASSERT_RESULT(err);
     }
 
     void Buffer::DestoryBufferView()

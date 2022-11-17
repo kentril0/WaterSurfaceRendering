@@ -75,7 +75,7 @@ namespace vkp
     private:
         VkDebugUtilsMessengerEXT m_DebugMessenger{ VK_NULL_HANDLE };
 
-    #endif
+    #endif // ifdef VKP_DEBUG
 
     };
 

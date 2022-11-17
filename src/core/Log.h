@@ -39,22 +39,24 @@ namespace vkp
 
 } // namespace vkp
 
-#define VKP_LOG_TRACE(...) ::vkp::Log::GetLogger()->trace(__VA_ARGS__)
-#define VKP_LOG_INFO(...)  ::vkp::Log::GetLogger()->info(__VA_ARGS__)
-#define VKP_LOG_WARN(...)  ::vkp::Log::GetLogger()->warn(__VA_ARGS__)
-#define VKP_LOG_ERR(...)   ::vkp::Log::GetLogger()->error(__VA_ARGS__)
-#define VKP_LOG_CRIT(...)  ::vkp::Log::GetLogger()->critical(__VA_ARGS__)
+#ifdef VKP_DEBUG
+    #define VKP_LOG_TRACE(...) ::vkp::Log::GetLogger()->trace(__VA_ARGS__)
+    #define VKP_LOG_INFO(...)  ::vkp::Log::GetLogger()->info(__VA_ARGS__)
+    #define VKP_LOG_WARN(...)  ::vkp::Log::GetLogger()->warn(__VA_ARGS__)
+    #define VKP_LOG_ERR(...)   ::vkp::Log::GetLogger()->error(__VA_ARGS__)
+    #define VKP_LOG_CRIT(...)  ::vkp::Log::GetLogger()->critical(__VA_ARGS__)
 
-#define VKP_ASSERT_LOGGER() ::vkp::Log::GetAssertLogger()
-
-// @brief Prints that the function has been called, and when
-#define VKP_REGISTER_FUNCTION() { \
-    SPDLOG_LOGGER_TRACE(::vkp::Log::GetAssertLogger(), ""); \
-}
-
-// TODO - scoped timer
-#define VKP_PROFILE_FUNCTION() { \
-    SPDLOG_LOGGER_TRACE(::vkp::Log::GetAssertLogger(), ""); \
-}
+    // @brief Prints that the function has been called, and when
+    #define VKP_REGISTER_FUNCTION() { \
+        SPDLOG_LOGGER_TRACE(::vkp::Log::GetAssertLogger(), ""); \
+    }
+#else
+    #define VKP_LOG_TRACE(...)
+    #define VKP_LOG_INFO(...)
+    #define VKP_LOG_WARN(...)
+    #define VKP_LOG_ERR(...)
+    #define VKP_LOG_CRIT(...)
+    #define VKP_REGISTER_FUNCTION()
+#endif // ifdef VKP_DEBUG
 
 #endif // WATER_SURFACE_RENDERING_CORE_LOG_H_

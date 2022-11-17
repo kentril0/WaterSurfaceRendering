@@ -52,8 +52,8 @@ namespace vkp
         viewInfo.subresourceRange.levelCount = mipLevelCount;
         viewInfo.subresourceRange.layerCount = arrayLayerCount;
 
-        VKP_ASSERT_RESULT(
-            vkCreateImageView(m_Device, &viewInfo, nullptr, &m_ImageView));
+        auto err = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_ImageView);
+        VKP_ASSERT_RESULT(err);
     }
 
     void ImageView::Destroy()
