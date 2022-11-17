@@ -974,7 +974,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
         ImGui::SliderFloat("Sky Intensity",
                            &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
         ImGui::SliderFloat("Specular Intensity",
-                           &m_WaterSurfaceUBO.specularIntensity, 0.f, 10.f);
+                           &m_WaterSurfaceUBO.specularIntensity, 0.f, 100.f);
         ImGui::SliderFloat("Specular Highlights",
                            &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
 

@@ -259,7 +259,7 @@ private:
         alignas(16) glm::vec4 sunColor   { 0.7, 0.45, 0.3, 1.0 };
         float terrainDepth{ -999.0};
         float skyIntensity{ 1.0 };
-        float specularIntensity{ 0.6 };
+        float specularIntensity{ 10.0 };
         float specularHighlights{ 32.0 };
         alignas(16) glm::vec3 absorpCoef;
         alignas(16) glm::vec3 scatterCoef;
