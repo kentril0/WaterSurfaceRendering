@@ -76,6 +76,11 @@ public:
     // @pre Called inside ImGui Window scope
     void ShowGUISettings();
 
+    void RecompileShaders(
+        VkRenderPass renderPass,
+        const VkExtent2D kFramebufferExtent,
+        const bool kFramebufferHasDepthAttachment);
+
 private:
     // TODO batch 
 

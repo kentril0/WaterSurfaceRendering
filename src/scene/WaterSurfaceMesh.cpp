@@ -1027,3 +1027,18 @@ void WaterSurfaceMesh::ShowLightingSettings()
         ImGui::NewLine();
     }
 }
+
+void WaterSurfaceMesh::RecompileShaders(
+    VkRenderPass renderPass,
+    const VkExtent2D kFramebufferExtent,
+    const bool kFramebufferHasDepthAttachment
+)
+{
+    const bool kNeedsRecreation = m_Pipeline->RecompileShaders();
+    if (kNeedsRecreation)
+    {
+        CreatePipeline(kFramebufferExtent,
+                       renderPass,
+                       kFramebufferHasDepthAttachment);
+    }
+}
