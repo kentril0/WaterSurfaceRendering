@@ -999,7 +999,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
                 ComputeScatteringCoefPA01(
                     s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
 
-            static bool usePigment = false;
+            static bool usePigment = true;
             ImGui::Checkbox(" Consider pigment concentration", &usePigment);
             if (usePigment)
             {
@@ -1007,7 +1007,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
                 ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
 
                 m_WaterSurfaceUBO.backscatterCoef =
-                    ComputeBackscatteringCoefPigmentPA01(pigmentC * 10.f);
+                    ComputeBackscatteringCoefPigmentPA01(pigmentC);
             }
             else
             {
