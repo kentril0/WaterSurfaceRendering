@@ -24,6 +24,8 @@
 
 /**
  * EXPERIMENTAL
+ *  FIXME: incorrect layout when changing to uninitialized frame map pair without animation on
+ *  TODO: should be on dedicated thread
  * @brief Enable for double buffered textures: two sets of textures, one used for
  *  copying to, the other for rendering to, at each frame they are swapped.
  * For the current use-case, the performance might be slightly worse.
@@ -126,11 +128,7 @@ private:
         const VkFormat kMapFormat,
         const bool kUseMipMapping);
 
-    struct FrameMapData
-    {
-        std::unique_ptr<vkp::Texture2D> displacementMap{ nullptr };
-        std::unique_ptr<vkp::Texture2D> normalMap{ nullptr };
-    };
+    struct FrameMapData;
 
     void UpdateFrameMaps(
         VkCommandBuffer cmdBuffer,
@@ -219,6 +217,12 @@ private:
 
     std::unique_ptr<vkp::Buffer> m_StagingBuffer{ nullptr };
 
+    struct FrameMapData
+    {
+        std::unique_ptr<vkp::Texture2D> displacementMap{ nullptr };
+        std::unique_ptr<vkp::Texture2D> normalMap{ nullptr };
+    };
+
     struct FrameMapPair
     {
     #ifndef DOUBLE_BUFFERED
@@ -236,6 +240,8 @@ private:
 #ifdef DOUBLE_BUFFERED
     uint32_t m_FrameMapIndex{ 0 };      ///< Swap index
 #endif
+    // Whether the frame maps need to update after resolution has been changed
+    bool m_FrameMapNeedsUpdate{ false };
 
     // -------------------------------------------------------------------------
     // Uniform buffers data
