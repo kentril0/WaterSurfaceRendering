@@ -222,59 +222,67 @@ float WSTessendorf::ComputeWaves(float t)
     VKP_PROFILE_SCOPE();
     const auto kTileSize = m_TileSize;
 
-    for (uint32_t m = 0; m < kTileSize; ++m)
-        for (uint32_t n = 0; n < kTileSize; ++n)
-        {
-            m_Height[m * kTileSize + n] =
-                WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
-        }
-
     {
-        // Slopes for normals computation
+        VKP_PROFILE_SCOPE("ComputeWaves::Init");
+
         for (uint32_t m = 0; m < kTileSize; ++m)
             for (uint32_t n = 0; n < kTileSize; ++n)
             {
-                const uint32_t kIndex = m * kTileSize + n;
-                
-                const auto& kWaveVec = m_WaveVectors[kIndex].vec;
-                m_SlopeX[kIndex] = Complex(0, kWaveVec.x) * m_Height[kIndex];
-                m_SlopeZ[kIndex] = Complex(0, kWaveVec.y) * m_Height[kIndex];
+                m_Height[m * kTileSize + n] =
+                    WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
             }
 
-        // Displacement vectors
-        for (uint32_t m = 0; m < kTileSize; ++m)
-            for (uint32_t n = 0; n < kTileSize; ++n)
-            {
-                const uint32_t kIndex = m * kTileSize + n;
-                
-                const auto& kWaveVec = m_WaveVectors[kIndex];
-                m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) * m_Height[kIndex];
-                m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) * m_Height[kIndex];
+        {
+            // Slopes for normals computation
+            for (uint32_t m = 0; m < kTileSize; ++m)
+                for (uint32_t n = 0; n < kTileSize; ++n)
+                {
+                    const uint32_t kIndex = m * kTileSize + n;
 
-                m_dxDisplacementX[kIndex] = Complex(0, kWaveVec.vec.x) *
-                                            m_DisplacementX[kIndex];
-                m_dzDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.y) *
-                                            m_DisplacementZ[kIndex];
-            #ifdef COMPUTE_JACOBIAN
-                m_dzDisplacementX[kIndex] = Complex(0, kWaveVec.vec.y) *
-                                            m_DisplacementX[kIndex];
-                m_dxDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.x) *
-                                            m_DisplacementZ[kIndex];
-            #endif
-            }
+                    const auto& kWaveVec = m_WaveVectors[kIndex].vec;
+                    m_SlopeX[kIndex] = Complex(0, kWaveVec.x) * m_Height[kIndex];
+                    m_SlopeZ[kIndex] = Complex(0, kWaveVec.y) * m_Height[kIndex];
+                }
+
+            // Displacement vectors
+            for (uint32_t m = 0; m < kTileSize; ++m)
+                for (uint32_t n = 0; n < kTileSize; ++n)
+                {
+                    const uint32_t kIndex = m * kTileSize + n;
+
+                    const auto& kWaveVec = m_WaveVectors[kIndex];
+                    m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) * m_Height[kIndex];
+                    m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) * m_Height[kIndex];
+
+                    m_dxDisplacementX[kIndex] = Complex(0, kWaveVec.vec.x) *
+                                                m_DisplacementX[kIndex];
+                    m_dzDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.y) *
+                                                m_DisplacementZ[kIndex];
+                #ifdef COMPUTE_JACOBIAN
+                    m_dzDisplacementX[kIndex] = Complex(0, kWaveVec.vec.y) *
+                                                m_DisplacementX[kIndex];
+                    m_dxDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.x) *
+                                                m_DisplacementZ[kIndex];
+                #endif
+                }
+        }
     }
 
-    fftwf_execute(m_PlanHeight);
-    fftwf_execute(m_PlanSlopeX);
-    fftwf_execute(m_PlanSlopeZ);
-    fftwf_execute(m_PlanDisplacementX);
-    fftwf_execute(m_PlanDisplacementZ);
-    fftwf_execute(m_PlandxDisplacementX);
-    fftwf_execute(m_PlandzDisplacementZ);
-#ifdef COMPUTE_JACOBIAN
-    fftwf_execute(m_PlandzDisplacementX);
-    fftwf_execute(m_PlandxDisplacementZ);
-#endif
+    {
+        VKP_PROFILE_SCOPE("ComputeWaves::FFT");
+
+        fftwf_execute(m_PlanHeight);
+        fftwf_execute(m_PlanSlopeX);
+        fftwf_execute(m_PlanSlopeZ);
+        fftwf_execute(m_PlanDisplacementX);
+        fftwf_execute(m_PlanDisplacementZ);
+        fftwf_execute(m_PlandxDisplacementX);
+        fftwf_execute(m_PlandzDisplacementZ);
+    #ifdef COMPUTE_JACOBIAN
+        fftwf_execute(m_PlandzDisplacementX);
+        fftwf_execute(m_PlandxDisplacementZ);
+    #endif
+    }
 
     float maxHeight = std::numeric_limits<float>::min();
     float minHeight = std::numeric_limits<float>::max();
@@ -283,39 +291,43 @@ float WSTessendorf::ComputeWaves(float t)
     //  [-m_TileSize/2, ..., 0, ..., m_TileSize/2]
     const float kSigns[] = { 1.0f, -1.0f };
 
-    for (uint32_t m = 0; m < kTileSize; ++m)
     {
-        for (uint32_t n = 0; n < kTileSize; ++n)
-        {
-            const uint32_t kIndex = m * kTileSize + n;
-            const int sign = kSigns[(n + m) & 1];
-            const auto h_FT = m_Height[kIndex].real() * static_cast<float>(sign);
-            maxHeight = glm::max(h_FT, maxHeight);
-            minHeight = glm::min(h_FT, minHeight);
-        
-            auto& displacement = m_Displacements[kIndex];
-            displacement.y = h_FT;
-            displacement.x =
-                static_cast<float>(sign) * m_Lambda * m_DisplacementX[kIndex].real();
-            displacement.z =
-                static_cast<float>(sign) * m_Lambda * m_DisplacementZ[kIndex].real();
-            displacement.w = 1.0f;
-            
-        #ifdef COMPUTE_JACOBIAN
-            const float jacobian =
-                (1.0f + m_Lambda * sign * m_dxDisplacementX[kIndex].real()) *
-                (1.0f + m_Lambda * sign * m_dzDisplacementZ[kIndex].real()) -
-                (m_Lambda * sign * m_dxDisplacementZ[kIndex].real()) *
-                (m_Lambda * sign * m_dzDisplacementX[kIndex].real());
-            displacement.w = jacobian;
-        #endif
+        VKP_PROFILE_SCOPE("ComputeWaves::EndLoop");
 
-            m_Normals[kIndex] = glm::vec4(
-                sign * m_SlopeX[kIndex].real(),
-                sign * m_SlopeZ[kIndex].real(),
-                sign * m_dxDisplacementX[kIndex].real(),
-                sign * m_dzDisplacementZ[kIndex].real()
-            );
+        for (uint32_t m = 0; m < kTileSize; ++m)
+        {
+            for (uint32_t n = 0; n < kTileSize; ++n)
+            {
+                const uint32_t kIndex = m * kTileSize + n;
+                const int sign = kSigns[(n + m) & 1];
+                const auto h_FT = m_Height[kIndex].real() * static_cast<float>(sign);
+                maxHeight = glm::max(h_FT, maxHeight);
+                minHeight = glm::min(h_FT, minHeight);
+
+                auto& displacement = m_Displacements[kIndex];
+                displacement.y = h_FT;
+                displacement.x =
+                    static_cast<float>(sign) * m_Lambda * m_DisplacementX[kIndex].real();
+                displacement.z =
+                    static_cast<float>(sign) * m_Lambda * m_DisplacementZ[kIndex].real();
+                displacement.w = 1.0f;
+
+            #ifdef COMPUTE_JACOBIAN
+                const float jacobian =
+                    (1.0f + m_Lambda * sign * m_dxDisplacementX[kIndex].real()) *
+                    (1.0f + m_Lambda * sign * m_dzDisplacementZ[kIndex].real()) -
+                    (m_Lambda * sign * m_dxDisplacementZ[kIndex].real()) *
+                    (m_Lambda * sign * m_dzDisplacementX[kIndex].real());
+                displacement.w = jacobian;
+            #endif
+
+                m_Normals[kIndex] = glm::vec4(
+                    sign * m_SlopeX[kIndex].real(),
+                    sign * m_SlopeZ[kIndex].real(),
+                    sign * m_dxDisplacementX[kIndex].real(),
+                    sign * m_dzDisplacementZ[kIndex].real()
+                );
+            }
         }
     }
 
