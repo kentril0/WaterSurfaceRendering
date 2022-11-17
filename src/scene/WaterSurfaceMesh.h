@@ -281,7 +281,7 @@ private:
     bool m_ClampDepth{ true };
 
     // Should correspond to s_kMaxTileSize and s_kMinTileSize range
-    static constexpr gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{
+    static const inline gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{
         { 16, 32, 64, 128, 256, 512, 1024 },
         { "16", "32", "64", "128", "256", "512", "1024" }
     };
@@ -292,14 +292,14 @@ private:
     //      with type I being the clearest, type III being the most turbid
     //  1-9 correspond to coastal waters, from clearest to the most turbid
 
-    static constexpr glm::vec3 s_kWavelengthsRGB_m{ 680e-9, 550e-9, 440e-9};
-    static constexpr glm::vec3 s_kWavelengthsRGB_nm{ 680, 550, 440 };
+    static const inline glm::vec3 s_kWavelengthsRGB_m{ 680e-9, 550e-9, 440e-9};
+    static const inline glm::vec3 s_kWavelengthsRGB_nm{ 680, 550, 440 };
 
     uint32_t m_WaterTypeCoefIndex{ 0 };
     // Values of K_d for wavelengths: Red (680 nm), Green (550 nm), Blue (440 nm)
     //  INTERPOLATED from measured data in [PA01]
     // In m^-1
-    static constexpr gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsApprox{
+    static const inline gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsApprox{
         { glm::vec3{0.448, 0.063, 0.0202},
           glm::vec3{0.494, 0.089, 0.0732},
           glm::vec3{0.548, 0.120, 0.145 },
@@ -320,13 +320,13 @@ private:
         }
     };
 
-    static constexpr glm::vec3 s_kWavelengthsData_m{ 675e-9, 550e-9, 450e-9 };
-    static constexpr glm::vec3 s_kWavelengthsData_nm{ 675, 550, 450 };
+    static const inline glm::vec3 s_kWavelengthsData_m{ 675e-9, 550e-9, 450e-9 };
+    static const inline glm::vec3 s_kWavelengthsData_nm{ 675, 550, 450 };
 
     // Values of K_d for wavelengths: Red (675 nm), Green (550 nm), Blue (450 nm)
     //  real measured data from [PA01]  
     // In m^-1
-    static constexpr gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsAccurate{
+    static const inline gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsAccurate{
         { glm::vec3{0.420, 0.063, 0.019},
           glm::vec3{0.465, 0.089, 0.068},
           glm::vec3{0.520, 0.120, 0.135},

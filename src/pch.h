@@ -24,9 +24,8 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-// TODO benchmark later
-//#define GLM_FORCE_AVX
-//#define GLM_FORCE_INLINE
+#define GLM_FORCE_AVX
+#define GLM_FORCE_INLINE
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
