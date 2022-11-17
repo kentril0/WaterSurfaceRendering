@@ -117,8 +117,8 @@ namespace vkp
         info.dependencyCount = static_cast<uint32_t>(m_SubpassDependencies.size());
         info.pDependencies = m_SubpassDependencies.data();
     
-        VKP_ASSERT_RESULT(
-            vkCreateRenderPass(m_Device, &info, nullptr, &m_RenderPass));
+        auto err = vkCreateRenderPass(m_Device, &info, nullptr, &m_RenderPass);
+        VKP_ASSERT_RESULT(err);
     }
 
     void RenderPass::ConnectDepthStencilToSubpass(

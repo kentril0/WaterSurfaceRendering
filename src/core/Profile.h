@@ -7,9 +7,30 @@
 
 #define MICRO_TO_MILLIS 0.001
 
-// Profiling macros
-// use VKP_PROFILE_SCOPE() , or
-// use VKP_PROFILE_SCOPE("your description") 
+/**
+ * @brief Define VKP_PROFILE to use global *Profiling macros*:
+ * VKP_PROFILE_SCOPE() , or
+ * VKP_PROFILE_SCOPE("your description")
+ */
+
+#ifdef VKP_PROFILE
+    #define VKP_PSCOPE1(name, line) constexpr auto ff##line = ::vkp::GetBaseName(__FILE__); \
+        ::vkp::Profile::Timer timer##line( ::vkp::Profile::Record(name, ff##line) )
+    #define VKP_PSCOPE0(name, line) VKP_PSCOPE1(name, line)
+
+    #define VKP_PSCOPE_NONE() VKP_PSCOPE0(__func__, __LINE__)
+    #define VKP_PSCOPE_DESC(desc) VKP_PSCOPE0(desc, __LINE__)
+
+    #define VKP_EXPAND_PSCOPE(_0,_1,fname, ...) fname
+
+// -----------------------------
+    #define VKP_PROFILE_SCOPE(...) \
+        VKP_EXPAND_PSCOPE(_0, ##__VA_ARGS__, VKP_PSCOPE_DESC, VKP_PSCOPE_NONE)(__VA_ARGS__)
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#else
+    #define VKP_PROFILE_SCOPE(...)
+#endif
+
 
 namespace vkp
 {
@@ -18,10 +39,14 @@ namespace vkp
      *  a) Keeps a global data structure of profiling records.
      *  b) Profiling records can be inserted into the data structure from
      *      anywhere using compile-time macros:
+     *      foo():
      *      {
      *          VKP_PROFILE_SCOPE() // (1)
      *          ...
-     *      }   // The time taken from (1) to here is recorded.
+     *      }   // (2) The time taken 't' from (1) to here is recorded.
+     *
+     *  Generates profile record at (2):
+     *      { name: "foo", duration: t, fileName: __FILE__ }
      *
      *  c) The global data structure keeps each record once and keeps track of
      *      their ordering, so that the most recently added are extracted from
@@ -47,8 +72,13 @@ namespace vkp
         {
             const char* name;
             float duration;
+            const char* fileName;
+
+            Record(const char* str, const char* filename)
+                : Record(str, 0.0f, filename) {}
             
-            Record(const char* str, float val) : name(str), duration(val) {}
+            Record(const char* str, float val, const char* filename)
+                : name(str), duration(val), fileName(filename) {}
 
             bool operator==(const Record& o) const
             {
@@ -61,19 +91,20 @@ namespace vkp
          */
         static std::vector<Record> GetRecordsFromLatest();
 
+        /**
+         * @brief Inserts a record into the global profile data structure
+         */
         static void InsertRecord(const Record& r);
-        static void InsertRecord(const char* desc, float val);
 
-        template<typename Fn>
         class Timer 
         {
         public:
             /**
-             * @param name Name of the timed event
-             * @param func Called when stopped with parameter of type Profile::Record
+             * @param record Profile record that is going to be inserted at the
+             *  end of timer's lifetime.
              */
-            Timer(const char* name, Fn&& func)
-                : m_Name(name), m_Stopped(false), m_Func(func) { Start(); }
+            Timer(const Record& record)
+                : m_Record(record), m_Stopped(false) { Start(); }
 
             ~Timer()
             {
@@ -89,7 +120,8 @@ namespace vkp
             void Stop()
             {
                 m_Stopped = true;
-                m_Func({ m_Name, ElapsedMillis() });
+                m_Record.duration = ElapsedMillis();
+                Profile::InsertRecord(m_Record);
             }
 
             inline float ElapsedMillis() const
@@ -100,9 +132,8 @@ namespace vkp
             }
 
         private:
-            const char* m_Name;
+            Profile::Record m_Record;
             bool m_Stopped;
-            Fn m_Func;
 
             std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
         };
@@ -112,17 +143,24 @@ namespace vkp
         {
             const char* name;
             float duration;
+            const char* fileName;
 
             InternalRecord* prev;
             InternalRecord* next;
 
-            InternalRecord() : InternalRecord("Undef", 0.0f) {}
-            InternalRecord(const char* desc, float val)
-                : name(desc), duration(val), prev{nullptr}, next{nullptr} {}
+            InternalRecord() : InternalRecord("Undef", 0.0f, nullptr) {}
 
+            InternalRecord(const Record& record)
+                : InternalRecord(record.name, record.duration, record.fileName) {}
+
+            InternalRecord(const char* desc, float val, const char* filename)
+                : name(desc), duration(val), fileName(filename),
+                  prev{nullptr}, next{nullptr} {}
+            
             bool operator==(const InternalRecord& o) const
             {
-                return o.name == name;
+                return o.name == name &&
+                       o.fileName == fileName;
             }
         };
 
@@ -132,15 +170,17 @@ namespace vkp
 
     /**
      * @return Base file name from a file path string literal,
-     *  gets expanded at compile-time.
+     *  gets expanded at compile-time (even without temporary constexpr
+     *  variable when optimzation is enabled).
      *  Tested with x86-64 versions of: gcc 12.2, clang 15.0, MSVC 19.0
+     * TODO if not working then hash table of paths -> base file names
      */
     constexpr const char* GetBaseName(const char* path)
     {
         const char* p = path;
         while (*path != '\0')
         {
-            if (*path == '/' || *path == '\\')
+            if (*path == '/' || *path == '\\')  // Unix, Windows delim
                 p = path;
 
             ++path;
@@ -149,22 +189,6 @@ namespace vkp
     }
     
 } // namespace vkp
-
-
-#define VKP_PSCOPE1(name) vkp::Profile::Timer timer##__LINE__( \
-    name, \
-    [&](vkp::Profile::Record r) { vkp::Profile::InsertRecord(r); } \
-)
-
-#define VKP_PSCOPE0() vkp::Profile::Timer timer1##__LINE__( \
-    __func__, \
-    [&](vkp::Profile::Record r) { vkp::Profile::InsertRecord(r); } \
-)
-
-#define VKP_EXPAND_PSCOPE(_0,_1,fname, ...) fname
-
-#define VKP_PROFILE_SCOPE(...) \
-    VKP_EXPAND_PSCOPE(_0, ##__VA_ARGS__, VKP_PSCOPE1, VKP_PSCOPE0)(__VA_ARGS__)
 
 
 #endif // WATER_SURFACE_RENDERING_CORE_PROFILE_H_

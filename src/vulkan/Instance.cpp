@@ -98,6 +98,8 @@ namespace vkp
     // --------------------------------------------------------------------------
     // Debug utils
 
+#ifdef VKP_DEBUG
+
     bool Instance::ValidationLayersSupported() const
     {
         uint32_t layerCount;
@@ -216,5 +218,7 @@ namespace vkp
 
         return VK_FALSE;
     }
+
+#endif // ifdef VKP_DEBUG
 
 } // namespace vkp

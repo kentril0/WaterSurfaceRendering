@@ -46,9 +46,8 @@ VkDescriptorSet descriptorSets[kImageCount];
 ...
 for (uint32_t i = 0; i < kImageCount; ++i)
 {
-    VKP_ASSERT_RESULT(
-        pool->AllocateDescriptorSet(layout.GetLayout(), descriptorSets[i])
-    );
+    auto err = pool->AllocateDescriptorSet(layout.GetLayout(), descriptorSets[i]);
+    VKP_ASSERT_RESULT(err);
 }
 
 // 4. Update descriptor sets

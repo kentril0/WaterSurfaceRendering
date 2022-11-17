@@ -441,23 +441,25 @@ void WaterSurface::ShowStatusWindow() const
                      0, NULL, FLT_MAX, FLT_MAX, ImVec2(0,60));
 
     // Show profiling records
-    ImGui::NewLine();
-    ImGui::Text("Profiling data");
-    if ( ImGui::BeginTable("Profiling data", 2, ImGuiTableFlags_Resizable | 
-                                                ImGuiTableFlags_BordersOuter |
-                                                ImGuiTableFlags_BordersV) )
-    {
-        const auto& kRecords = vkp::Profile::GetRecordsFromLatest();
-        for (const auto& record : kRecords)
+    #ifdef VKP_PROFILE
+        ImGui::NewLine();
+        ImGui::Text("Profiling data");
+        if ( ImGui::BeginTable("Profiling data", 2, ImGuiTableFlags_Resizable | 
+                                                    ImGuiTableFlags_BordersOuter |
+                                                    ImGuiTableFlags_BordersV) )
         {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::Text("%.3f ms", record.duration);
-            ImGui::TableNextColumn();
-            ImGui::Text("%s", record.name);
+            const auto& kRecords = vkp::Profile::GetRecordsFromLatest();
+            for (const auto& record : kRecords)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%.3f ms", record.duration);
+                ImGui::TableNextColumn();
+                ImGui::Text("%s", record.name);
+            }
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
-    }
+    #endif
 
     ImGui::End();
 }
