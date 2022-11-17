@@ -47,26 +47,14 @@ vec3 SkyColor(const in Ray ray)
 }
 
 /**
- * @brief Intersects terrain from above its bounding plane
  * @brief Finds an intersection point of ray with the terrain
  * @return Distance along the ray; positive if intersects, else negative
  */
-float IntersectTerrain(const in Ray ray)
-{
-    return -( dot(ray.org, kTerrainBoundPlane.xyz) - kTerrainBoundPlane.w ) /
-           dot(ray.dir, kTerrainBoundPlane.xyz);
-}
+float IntersectTerrain(const in Ray ray);
 
-vec3 TerrainNormal(const in vec2 p)
-{
-    return NORMAL_WORLD_UP;
-}
+vec3 TerrainNormal(const in vec2 p);
 
-vec3 TerrainColor(const in vec2 p)
-{
-    const vec3 kMate = vec3(0.964, 1.0, 0.824);
-    return kMate;
-}
+vec3 TerrainColor(const in vec2 p);
 
 /**
  * @brief Fresnel reflectance for unpolarized incident light
@@ -197,4 +185,94 @@ void main ()
     // TODO color correction, grading
 
     fragColor = vec4( color ,1.0);
+}
+
+
+// =============================================================================
+// Terrain functions
+
+float Fbm4Noise2D(in vec2 p);
+
+float TerrainHeight(const in vec2 p)
+{
+    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.02 * 2.);
+}
+
+vec3 TerrainNormal(const in vec2 p)
+{
+    // Approximate normal based on central differences method for height map
+    const vec2 kEpsilon = vec2(0.0001, 0.0);
+
+    return normalize(
+        vec3(
+            // x + offset
+            TerrainHeight(p - kEpsilon.xy) - TerrainHeight(p + kEpsilon.xy), 
+            2.0f * kEpsilon.x,
+            // z + offset
+            TerrainHeight(p - kEpsilon.yx) - TerrainHeight(p + kEpsilon.yx)
+        )
+    );
+}
+
+vec3 TerrainColor(const in vec2 p)
+{
+    const vec3 kMate = vec3(0.964, 1.0, 0.824);
+    float n = clamp(Fbm4Noise2D(p.yx * 0.02 * 2.), 0.6, 0.9);
+
+    return n * kMate;
+}
+
+float IntersectTerrain(const in Ray ray)
+{
+    return -( dot(ray.org, kTerrainBoundPlane.xyz) - kTerrainBoundPlane.w ) /
+           dot(ray.dir, kTerrainBoundPlane.xyz);
+}
+
+// =============================================================================
+// Noise functions
+
+float hash1(in vec2 i)
+{
+    i = 50.0 * fract( i * ONE_OVER_PI );
+    return fract( i.x * i.y * (i.x + i.y) );
+}
+
+float Noise2D(const in vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+
+#ifdef INTERPOLATION_CUBIC
+    vec2 u = f*f * (3.0-2.0*f);
+#else
+    vec2 u = f*f*f * (f * (f*6.0-15.0) +10.0);
+#endif
+    float a = hash1(i + vec2(0,0) );
+    float b = hash1(i + vec2(1,0) );
+    float c = hash1(i + vec2(0,1) );
+    float d = hash1(i + vec2(1,1) );
+
+    return -1.0 + 2.0 * (a + 
+                         (b - a) * u.x + 
+                         (c - a) * u.y + 
+                         (a - b - c + d) * u.x * u.y);
+}
+
+const mat2 MAT345 = mat2( 4./5., -3./5.,
+                          3./5.,  4./5. );
+
+float Fbm4Noise2D(in vec2 p)
+{
+    const float kFreq = 2.0;
+    const float kGain = 0.5;
+    float amplitude = 0.5;
+    float value = 0.0;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        value += amplitude * Noise2D(p);
+        amplitude *= kGain;
+        p = kFreq * MAT345 * p;
+    }
+    return value;
 }
