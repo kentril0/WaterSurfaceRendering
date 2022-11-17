@@ -1,12 +1,14 @@
 Water Surface Rendering
 =======================
 Experimenting with real-time water surface generation and rendering in 3D using C++ and Vulkan.
+The application synthetizes a patch of ocean based on a selected surface model with various customizable parameters.
 
 ## Features
 
 * Tessendorf's choppy wave surface model generation using FFT on CPU [[1]](#sources)
 * Rendered as a displaced mesh (a grid of vertices)
-* Shading based on Baboud, Décoret, oceanic data, optic laws [[3],[2],[1],[4]](#sources)
+* Shading based on article by Baboud, Décoret, oceanic data, optic laws [[3],[2],[1],[4]](#sources)
+* Simple underwater terrain using value noise to get some details underwater
 * GUI interface - allows for modification of parameters at runtime
 * FPS Camera
 * Profiling
@@ -15,9 +17,9 @@ For more info, see Section [How it Works](#how-it-works).
 
 |   |   |
 |---|---|
-|![alt text](docs/figures/1-latest-profile.png)|![alt text](docs/figures/2-higher-waves.png)|
-|![alt text](docs/figures/5-close-clear.png)|![alt text](docs/figures/6-close-deep.png)|
-|![alt text](docs/figures/3-clearest-ocean-close.png)|![alt text](docs/figures/4-pigmented-clear.png)|
+|![alt text](docs/figures/1-after-open.png)|![alt text](docs/figures/2-close-sunset.png)|
+|![alt text](docs/figures/3-turbid-waters.png)|![alt text](docs/figures/4-default-after-open.png)|
+|![alt text](docs/figures/5-shallow.png)|![alt text](docs/figures/6-open-ocean.png)|
 
 Profiling window:
 
@@ -75,8 +77,8 @@ This mesh is then rendered with the two textures bound. Vertex positions are dis
 
 ### Shading
 
-The color of the water surface is computed per fragment based on the methods in articles [2] and [3] with the use of geometrical (ray) optics equations mentioned in [4]. 
-In short: Rays are traced from the camera to each fragment on the water surface. At the fragment's position, sky and sun contributions are computed. Then the ray gets refracted along the surface and it is attenuated and scattered in the water until it reaches an imaginary underwater ground plane at a certain depth. The final color is composited from these contributions using Fresnel's formula.
+The color of the water surface is computed per fragment based on the methods in articles [2] and [3] with the use of geometrical (ray) optics equations mentioned in [4]. Water surface is treated as a collection of locally planar facets. Light transport across a flat surface is simulated based on Blinn-Phong reflection model.
+In short: Rays are traced from the camera to each fragment on the water surface. At the fragment's position, sky and sun contributions are computed. Then the ray gets refracted along the surface and it is absorbed and scattered in the water until it reaches an imaginary underwater ground plane at a certain depth. The final color is composited from these contributions using Fresnel's formula.
 
 Based on Tessendorf's notes [1], the amount of outgoing radiance $L$ from a fragment on the water surface (simply fragment) to the camera is computed in simplified terms as:
 ```math
