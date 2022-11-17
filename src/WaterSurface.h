@@ -99,6 +99,7 @@ private:
     enum Controls
     {
         KeyHideGui = GLFW_KEY_ESCAPE,
+        KeyRecompileShaders = GLFW_KEY_F1,
     };
 
     // -------------------------------------------------------------------------

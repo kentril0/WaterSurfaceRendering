@@ -974,7 +974,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
         ImGui::SliderFloat("Sky Intensity",
                            &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
         ImGui::SliderFloat("Specular Intensity",
-                           &m_WaterSurfaceUBO.specularIntensity, 0.f, 10.f);
+                           &m_WaterSurfaceUBO.specularIntensity, 0.f, 100.f);
         ImGui::SliderFloat("Specular Highlights",
                            &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
 
@@ -999,21 +999,46 @@ void WaterSurfaceMesh::ShowLightingSettings()
                 ComputeScatteringCoefPA01(
                     s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
 
-            static float pigmentC = 1.0;
-            ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
+            static bool usePigment = true;
+            ImGui::Checkbox(" Consider pigment concentration", &usePigment);
+            if (usePigment)
+            {
+                static float pigmentC = 1.0;
+                ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
 
-            m_WaterSurfaceUBO.backscatterCoef =
-                ComputeBackscatteringCoefPigmentPA01(pigmentC * 10.f);
+                m_WaterSurfaceUBO.backscatterCoef =
+                    ComputeBackscatteringCoefPigmentPA01(pigmentC);
+            }
+            else
+            {
+                m_WaterSurfaceUBO.backscatterCoef =
+                    ComputeBackscatteringCoefPA01(m_WaterSurfaceUBO.scatterCoef);
+            }
 
             // Terrain
-            ImGui::DragFloat("Ocean depth [cm]", &m_WaterSurfaceUBO.terrainDepth,
+            ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
                              1.0f, -999.0f, 0.0f);
-            ImGui::Checkbox(" Clamp to surface height", &m_ClampDepth);
+            ImGui::Checkbox(" Clamp depth to surface height", &m_ClampDepth);
 
             ImGui::TreePop();
         }
 
         ImGui::PopItemWidth();
         ImGui::NewLine();
+    }
+}
+
+void WaterSurfaceMesh::RecompileShaders(
+    VkRenderPass renderPass,
+    const VkExtent2D kFramebufferExtent,
+    const bool kFramebufferHasDepthAttachment
+)
+{
+    const bool kNeedsRecreation = m_Pipeline->RecompileShaders();
+    if (kNeedsRecreation)
+    {
+        CreatePipeline(kFramebufferExtent,
+                       renderPass,
+                       kFramebufferHasDepthAttachment);
     }
 }

@@ -56,8 +56,7 @@ public:
         VkRenderPass renderPass,
         const uint32_t kImageCount,
         const VkExtent2D kFramebufferExtent,
-        const bool kFramebufferHasDepthAttachment
-    );
+        const bool kFramebufferHasDepthAttachment);
 
     void Prepare(VkCommandBuffer cmdBuffer);
 
@@ -68,16 +67,19 @@ public:
         VkCommandBuffer cmdBuffer,
         const glm::mat4& viewMat,
         const glm::mat4& projMat,
-        const glm::vec3& camPos
-    );
+        const glm::vec3& camPos);
  
     void Render(
         const uint32_t frameIndex,
-        VkCommandBuffer cmdBuffer
-    );
+        VkCommandBuffer cmdBuffer);
 
     // @pre Called inside ImGui Window scope
     void ShowGUISettings();
+
+    void RecompileShaders(
+        VkRenderPass renderPass,
+        const VkExtent2D kFramebufferExtent,
+        const bool kFramebufferHasDepthAttachment);
 
 private:
     // TODO batch 
@@ -254,10 +256,10 @@ private:
         alignas(16) glm::vec3 camPos;
         alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
         //                    vec4(vec3(suncolor), sunIntensity)
-        alignas(16) glm::vec4 sunColor   { 7.0, 4.5, 3.0, 0.1 };
+        alignas(16) glm::vec4 sunColor   { 0.7, 0.45, 0.3, 1.0 };
         float terrainDepth{ -999.0};
         float skyIntensity{ 1.0 };
-        float specularIntensity{ 0.6 };
+        float specularIntensity{ 10.0 };
         float specularHighlights{ 32.0 };
         alignas(16) glm::vec3 absorpCoef;
         alignas(16) glm::vec3 scatterCoef;
