@@ -8,13 +8,6 @@
 
 #include "core/Assert.h"
 
-#define VKP_ASSERT_RESULT(st) VKP_ASSERT((st) == VK_SUCCESS)
-#define VKP_ASSERT_RESULT_CORE(st) VKP_ASSERT_CORE((st) == VK_SUCCESS)
-
-#define VKP_ASSERT_RESULT_MSG(st, msg) VKP_ASSERT_MSG((st) == VK_SUCCESS, msg)
-#define VKP_ASSERT_RESULT_CORE_MSG(st, msg)  \
-    VKP_ASSERT_CORE_MSG((st) == VK_SUCCESS, msg)
-
 
 namespace vkp
 {
