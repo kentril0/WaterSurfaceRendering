@@ -223,8 +223,8 @@ private:
     fftwf_plan m_PlandzDisplacementX{ nullptr };
 #endif
 
-    float m_MinHeight{ -999.0 };
-    float m_MaxHeight{ 999.0 };
+    float m_MinHeight{ -1.0f };
+    float m_MaxHeight{ 1.0f };
 
 private:
     static constexpr float s_kG{ 9.81 };   ///< Gravitational constant
