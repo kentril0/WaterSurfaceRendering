@@ -206,18 +206,7 @@ private:
     Complex* m_dzDisplacementX{ nullptr };
 #endif
 
-    // TODO Profile: once plan is created, changing to another data pointers is fast
-    fftwf_plan m_PlanHeight{ nullptr };
-    fftwf_plan m_PlanSlopeX{ nullptr };
-    fftwf_plan m_PlanSlopeZ{ nullptr };
-    fftwf_plan m_PlanDisplacementX{ nullptr };
-    fftwf_plan m_PlanDisplacementZ{ nullptr };
-    fftwf_plan m_PlandxDisplacementX{ nullptr };
-    fftwf_plan m_PlandzDisplacementZ{ nullptr };
-#ifdef COMPUTE_JACOBIAN
-    fftwf_plan m_PlandxDisplacementZ{ nullptr };
-    fftwf_plan m_PlandzDisplacementX{ nullptr };
-#endif
+    fftwf_plan m_Plan{ nullptr };
 
     float m_MinHeight{ -999.0 };
     float m_MaxHeight{ 999.0 };

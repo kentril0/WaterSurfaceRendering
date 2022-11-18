@@ -7,6 +7,7 @@
 #include "scene/WSTessendorf.h"
 
 #include <core/Profile.h>
+#include <omp.h>
 
 
 WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength)
@@ -22,12 +23,17 @@ WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength)
 
     SetPhillipsConst(s_kDefaultPhillipsConst);
     SetDamping(s_kDefaultPhillipsDamping);
+
+    fftwf_init_threads();
+    fftwf_plan_with_nthreads(omp_get_max_threads());
 }
 
 WSTessendorf::~WSTessendorf()
 {
     VKP_REGISTER_FUNCTION();
     DestroyFFTW();
+
+    fftwf_cleanup_threads();
 }
 
 void WSTessendorf::Prepare()
@@ -126,83 +132,23 @@ void WSTessendorf::SetupFFTW()
     m_dxDisplacementZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
 #endif
 
-    m_PlanHeight = fftwf_plan_dft_2d(
+    m_Plan = fftwf_plan_dft_2d(
         kSize, kSize,
         reinterpret_cast<fftwf_complex*>(m_Height),
         reinterpret_cast<fftwf_complex*>(m_Height),
         FFTW_BACKWARD,
         FFTW_MEASURE);
-    m_PlanSlopeX = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_SlopeX),
-        reinterpret_cast<fftwf_complex*>(m_SlopeX),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlanSlopeZ = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
-        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlanDisplacementX = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
-        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlanDisplacementZ = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
-        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlandxDisplacementX = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_dxDisplacementX),
-        reinterpret_cast<fftwf_complex*>(m_dxDisplacementX),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlandzDisplacementZ = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_dzDisplacementZ),
-        reinterpret_cast<fftwf_complex*>(m_dzDisplacementZ),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-#ifdef COMPUTE_JACOBIAN
-    m_PlandzDisplacementX = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_dzDisplacementX),
-        reinterpret_cast<fftwf_complex*>(m_dzDisplacementX),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-    m_PlandxDisplacementZ = fftwf_plan_dft_2d(
-        kSize, kSize, 
-        reinterpret_cast<fftwf_complex*>(m_dxDisplacementZ),
-        reinterpret_cast<fftwf_complex*>(m_dxDisplacementZ),
-        FFTW_BACKWARD,
-        FFTW_MEASURE);
-#endif
 }
 
 void WSTessendorf::DestroyFFTW()
 {
     VKP_REGISTER_FUNCTION();
 
-    if (m_PlanHeight == nullptr)
+    if (m_Plan == nullptr)
         return;
 
-    fftwf_destroy_plan(m_PlanHeight);
-    m_PlanHeight = nullptr;
-    fftwf_destroy_plan(m_PlanSlopeX);
-    fftwf_destroy_plan(m_PlanSlopeZ);
-    fftwf_destroy_plan(m_PlanDisplacementX);
-    fftwf_destroy_plan(m_PlanDisplacementZ);
-    fftwf_destroy_plan(m_PlandxDisplacementX);
-    fftwf_destroy_plan(m_PlandzDisplacementZ);
-#ifdef COMPUTE_JACOBIAN
-    fftwf_destroy_plan(m_PlandxDisplacementZ);
-    fftwf_destroy_plan(m_PlandzDisplacementX);
-#endif
+    fftwf_destroy_plan(m_Plan);
+    m_Plan = nullptr;
 
     fftwf_free((fftwf_complex*)m_Height);
     fftwf_free((fftwf_complex*)m_SlopeX);
@@ -225,15 +171,18 @@ float WSTessendorf::ComputeWaves(float t)
     {
         VKP_PROFILE_SCOPE("ComputeWaves::Init");
 
-        for (uint32_t m = 0; m < kTileSize; ++m)
-            for (uint32_t n = 0; n < kTileSize; ++n)
-            {
-                m_Height[m * kTileSize + n] =
-                    WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
-            }
-
+        #pragma omp parallel num_threads(4)
         {
+            #pragma omp for collapse(2) schedule(static)
+            for (uint32_t m = 0; m < kTileSize; ++m)
+                for (uint32_t n = 0; n < kTileSize; ++n)
+                {
+                    m_Height[m * kTileSize + n] =
+                        WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
+                }
+
             // Slopes for normals computation
+            #pragma omp for collapse(2) schedule(static) nowait
             for (uint32_t m = 0; m < kTileSize; ++m)
                 for (uint32_t n = 0; n < kTileSize; ++n)
                 {
@@ -245,15 +194,17 @@ float WSTessendorf::ComputeWaves(float t)
                 }
 
             // Displacement vectors
+            #pragma omp for collapse(2) schedule(static) nowait
             for (uint32_t m = 0; m < kTileSize; ++m)
                 for (uint32_t n = 0; n < kTileSize; ++n)
                 {
                     const uint32_t kIndex = m * kTileSize + n;
 
                     const auto& kWaveVec = m_WaveVectors[kIndex];
-                    m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) * m_Height[kIndex];
-                    m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) * m_Height[kIndex];
-
+                    m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) *
+                                              m_Height[kIndex];
+                    m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) *
+                                              m_Height[kIndex];
                     m_dxDisplacementX[kIndex] = Complex(0, kWaveVec.vec.x) *
                                                 m_DisplacementX[kIndex];
                     m_dzDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.y) *
@@ -271,16 +222,25 @@ float WSTessendorf::ComputeWaves(float t)
     {
         VKP_PROFILE_SCOPE("ComputeWaves::FFT");
 
-        fftwf_execute(m_PlanHeight);
-        fftwf_execute(m_PlanSlopeX);
-        fftwf_execute(m_PlanSlopeZ);
-        fftwf_execute(m_PlanDisplacementX);
-        fftwf_execute(m_PlanDisplacementZ);
-        fftwf_execute(m_PlandxDisplacementX);
-        fftwf_execute(m_PlandzDisplacementZ);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_Height, (fftwf_complex*)m_Height);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_SlopeX, (fftwf_complex*)m_SlopeX);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_SlopeZ, (fftwf_complex*)m_SlopeZ);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_DisplacementX, (fftwf_complex*)m_DisplacementX);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_DisplacementZ, (fftwf_complex*)m_DisplacementZ);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_dxDisplacementX, (fftwf_complex*)m_dxDisplacementX);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_dzDisplacementZ, (fftwf_complex*)m_dzDisplacementZ);
     #ifdef COMPUTE_JACOBIAN
-        fftwf_execute(m_PlandzDisplacementX);
-        fftwf_execute(m_PlandxDisplacementZ);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_dzDisplacementX, (fftwf_complex*)m_dzDisplacementX);
+        fftwf_execute_dft(m_Plan,
+            (fftwf_complex*)m_dxDisplacementZ, (fftwf_complex*)m_dxDisplacementZ);
     #endif
     }
 
