@@ -23,9 +23,6 @@ WSTessendorf::WSTessendorf(uint32_t tileSize, float tileLength)
 
     SetPhillipsConst(s_kDefaultPhillipsConst);
     SetDamping(s_kDefaultPhillipsDamping);
-
-    fftwf_init_threads();
-    fftwf_plan_with_nthreads(omp_get_max_threads());
 }
 
 WSTessendorf::~WSTessendorf()
@@ -33,7 +30,7 @@ WSTessendorf::~WSTessendorf()
     VKP_REGISTER_FUNCTION();
     DestroyFFTW();
 
-    fftwf_cleanup_threads();
+    fftwf_cleanup();
 }
 
 void WSTessendorf::Prepare()
@@ -44,7 +41,9 @@ void WSTessendorf::Prepare()
     VKP_LOG_INFO("Water surface resolution: {} x {}", m_TileSize, m_TileSize);
 
     m_WaveVectors = ComputeWaveVectors();
-    m_BaseWaveHeights = ComputeBaseWaveHeightField();
+
+    std::vector<Complex> gaussRandomArr = ComputeGaussRandomArray();
+    m_BaseWaveHeights = ComputeBaseWaveHeightField(gaussRandomArr);
 
     const uint32_t kSize = m_TileSize;
 
@@ -85,28 +84,63 @@ std::vector<WSTessendorf::WaveVector> WSTessendorf::ComputeWaveVectors() const
     return waveVecs;
 }
 
-std::vector<WSTessendorf::BaseWaveHeight>
-    WSTessendorf::ComputeBaseWaveHeightField() const
+std::vector<WSTessendorf::Complex> WSTessendorf::ComputeGaussRandomArray() const
 {
     VKP_REGISTER_FUNCTION();
     VKP_PROFILE_SCOPE();
 
-    const int32_t kSize = m_TileSize;
-    const float kLength = m_TileLength;
+    const uint32_t kSize = m_TileSize;
+    std::vector<Complex> randomArr(kSize * kSize);
+
+    for (int32_t m = 0; m < kSize; ++m)
+        for (int32_t n = 0; n < kSize; ++n)
+        {
+            randomArr[m * kSize + n] = Complex(glm::gaussRand(0.0f, 1.0f),
+                                               glm::gaussRand(0.0f, 1.0f));
+        }
+
+    return randomArr;
+}
+
+std::vector<WSTessendorf::BaseWaveHeight>
+    WSTessendorf::ComputeBaseWaveHeightField(
+        const std::vector<Complex>& gaussRandomArray
+    ) const
+{
+    VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
+
+    const uint32_t kSize = m_TileSize;
 
     std::vector<WSTessendorf::BaseWaveHeight> baseWaveHeights(kSize * kSize);
     VKP_ASSERT(m_WaveVectors.size() == baseWaveHeights.size());
+    VKP_ASSERT(baseWaveHeights.size() == gaussRandomArray.size());
 
-    for (int32_t m = 0; m < kSize; ++m)
+    #pragma omp parallel for collapse(2) schedule(guided) num_threads(4)
+    for (uint32_t m = 0; m < kSize; ++m)
     {
-        for (int32_t n = 0; n < kSize; ++n)
+        for (uint32_t n = 0; n < kSize; ++n)
         {
-            auto& h0 = baseWaveHeights[m * kSize + n];
+            const uint32_t kIndex = m * kSize + n;
+            const auto& kWaveVec = m_WaveVectors[kIndex];
+            const float k = glm::length(kWaveVec.vec);
 
-            const auto& kWaveVec = m_WaveVectors[m * kSize + n].vec;
-            h0.heightAmp = BaseWaveHeightFT(kWaveVec);
-            h0.heightAmp_conj = std::conj(BaseWaveHeightFT(-kWaveVec));
-            h0.dispersion = QDispersion( glm::length(kWaveVec) );
+            auto& h0 = baseWaveHeights[kIndex];
+            if (k > 0.00001f)
+            {
+                const auto gaussRandom = gaussRandomArray[kIndex];
+                h0.heightAmp =
+                    BaseWaveHeightFT(gaussRandom, kWaveVec.unit, k);
+                h0.heightAmp_conj = std::conj(
+                    BaseWaveHeightFT(gaussRandom, -kWaveVec.unit, k) );
+                h0.dispersion = QDispersion(k);
+            }
+            else 
+            {
+                h0.heightAmp = Complex(0);
+                h0.heightAmp_conj = std::conj( Complex(0) );
+                h0.dispersion = 0.0f;
+            }
         }
     }
 
@@ -116,50 +150,134 @@ std::vector<WSTessendorf::BaseWaveHeight>
 void WSTessendorf::SetupFFTW()
 {
     VKP_REGISTER_FUNCTION();
+    VKP_PROFILE_SCOPE();
 
     const uint32_t kSize = m_TileSize;
+    const uint32_t kSize2 = kSize * kSize;
 
-    /// TODO optimize as one malloc
-    m_Height = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_SlopeX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_SlopeZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_DisplacementX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_DisplacementZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_dxDisplacementX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_dzDisplacementZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-#ifdef COMPUTE_JACOBIAN
-    m_dzDisplacementX = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
-    m_dxDisplacementZ = (Complex*)fftwf_malloc(sizeof(fftwf_complex) * kSize * kSize);
+#ifndef COMPUTE_JACOBIAN
+    const uint32_t kTotalInputs = 7;
+#else
+    const uint32_t kTotalInputs = 7+2;
 #endif
 
-    m_Plan = fftwf_plan_dft_2d(
+    m_Height = (Complex*)fftwf_alloc_complex(kTotalInputs * kSize2);
+
+    m_SlopeX =          m_Height + kSize2;
+    m_SlopeZ =          m_SlopeX + kSize2;
+    m_DisplacementX =   m_SlopeZ + kSize2;
+    m_DisplacementZ =   m_DisplacementX + kSize2;
+    m_dxDisplacementX = m_DisplacementZ + kSize2;
+    m_dzDisplacementZ = m_dxDisplacementX + kSize2;
+#ifdef COMPUTE_JACOBIAN
+    m_dzDisplacementX = m_dzDisplacementZ + kSize2;
+    m_dxDisplacementZ = m_dzDisplacementX + kSize2;
+#endif
+    
+#ifdef CAREFUL_ALLOC
+        m_Height =          (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_SlopeX =          (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_SlopeZ =          (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_DisplacementX =   (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_DisplacementZ =   (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_dxDisplacementX = (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_dzDisplacementZ = (Complex*)fftwf_alloc_complex(kSize * kSize);
+    #ifdef COMPUTE_JACOBIAN
+        m_dzDisplacementX = (Complex*)fftwf_alloc_complex(kSize * kSize);
+        m_dxDisplacementZ = (Complex*)fftwf_alloc_complex(kSize * kSize);
+    #endif
+#endif
+
+    m_PlanHeight = fftwf_plan_dft_2d(
         kSize, kSize,
         reinterpret_cast<fftwf_complex*>(m_Height),
         reinterpret_cast<fftwf_complex*>(m_Height),
         FFTW_BACKWARD,
         FFTW_MEASURE);
+    m_PlanSlopeX = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_SlopeX),
+        reinterpret_cast<fftwf_complex*>(m_SlopeX),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlanSlopeZ = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
+        reinterpret_cast<fftwf_complex*>(m_SlopeZ),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlanDisplacementX = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
+        reinterpret_cast<fftwf_complex*>(m_DisplacementX),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlanDisplacementZ = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
+        reinterpret_cast<fftwf_complex*>(m_DisplacementZ),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlandxDisplacementX = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_dxDisplacementX),
+        reinterpret_cast<fftwf_complex*>(m_dxDisplacementX),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlandzDisplacementZ = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_dzDisplacementZ),
+        reinterpret_cast<fftwf_complex*>(m_dzDisplacementZ),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+#ifdef COMPUTE_JACOBIAN
+    m_PlandzDisplacementX = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_dzDisplacementX),
+        reinterpret_cast<fftwf_complex*>(m_dzDisplacementX),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+    m_PlandxDisplacementZ = fftwf_plan_dft_2d(
+        kSize, kSize, 
+        reinterpret_cast<fftwf_complex*>(m_dxDisplacementZ),
+        reinterpret_cast<fftwf_complex*>(m_dxDisplacementZ),
+        FFTW_BACKWARD,
+        FFTW_MEASURE);
+#endif
 }
 
 void WSTessendorf::DestroyFFTW()
 {
     VKP_REGISTER_FUNCTION();
 
-    if (m_Plan == nullptr)
+    if (m_PlanHeight == nullptr)
         return;
 
-    fftwf_destroy_plan(m_Plan);
-    m_Plan = nullptr;
+    fftwf_destroy_plan(m_PlanHeight);
+    m_PlanHeight = nullptr;
+    fftwf_destroy_plan(m_PlanSlopeX);
+    fftwf_destroy_plan(m_PlanSlopeZ);
+    fftwf_destroy_plan(m_PlanDisplacementX);
+    fftwf_destroy_plan(m_PlanDisplacementZ);
+    fftwf_destroy_plan(m_PlandxDisplacementX);
+    fftwf_destroy_plan(m_PlandzDisplacementZ);
+#ifdef COMPUTE_JACOBIAN
+    fftwf_destroy_plan(m_PlandxDisplacementZ);
+    fftwf_destroy_plan(m_PlandzDisplacementX);
+#endif
 
     fftwf_free((fftwf_complex*)m_Height);
-    fftwf_free((fftwf_complex*)m_SlopeX);
-    fftwf_free((fftwf_complex*)m_SlopeZ);
-    fftwf_free((fftwf_complex*)m_DisplacementX);
-    fftwf_free((fftwf_complex*)m_DisplacementZ);
-    fftwf_free((fftwf_complex*)m_dxDisplacementX);
-    fftwf_free((fftwf_complex*)m_dzDisplacementZ);
-#ifdef COMPUTE_JACOBIAN
-    fftwf_free((fftwf_complex*)m_dxDisplacementZ);
-    fftwf_free((fftwf_complex*)m_dzDisplacementX);
+#ifdef CAREFUL_ALLOC
+        fftwf_free((fftwf_complex*)m_SlopeX);
+        fftwf_free((fftwf_complex*)m_SlopeZ);
+        fftwf_free((fftwf_complex*)m_DisplacementX);
+        fftwf_free((fftwf_complex*)m_DisplacementZ);
+        fftwf_free((fftwf_complex*)m_dxDisplacementX);
+        fftwf_free((fftwf_complex*)m_dzDisplacementZ);
+    #ifdef COMPUTE_JACOBIAN
+        fftwf_free((fftwf_complex*)m_dxDisplacementZ);
+        fftwf_free((fftwf_complex*)m_dzDisplacementX);
+    #endif
 #endif
 }
 
@@ -168,92 +286,105 @@ float WSTessendorf::ComputeWaves(float t)
     VKP_PROFILE_SCOPE();
     const auto kTileSize = m_TileSize;
 
-    {
-        VKP_PROFILE_SCOPE("ComputeWaves::Init");
+    float masterMaxHeight = std::numeric_limits<float>::min();
+    float masterMinHeight = std::numeric_limits<float>::max();
 
-        #pragma omp parallel num_threads(4)
+    #pragma omp parallel
+    {
+        #pragma omp for collapse(2) schedule(static)
+        for (uint32_t m = 0; m < kTileSize; ++m)
+            for (uint32_t n = 0; n < kTileSize; ++n)
+            {
+                m_Height[m * kTileSize + n] =
+                    WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
+            }
+
+        // Slopes for normals computation
+        #pragma omp for collapse(2) schedule(static) nowait
+        for (uint32_t m = 0; m < kTileSize; ++m)
+            for (uint32_t n = 0; n < kTileSize; ++n)
+            {
+                const uint32_t kIndex = m * kTileSize + n;
+
+                const auto& kWaveVec = m_WaveVectors[kIndex].vec;
+                m_SlopeX[kIndex] = Complex(0, kWaveVec.x) * m_Height[kIndex];
+                m_SlopeZ[kIndex] = Complex(0, kWaveVec.y) * m_Height[kIndex];
+            }
+
+        // Displacement vectors
+        #pragma omp for collapse(2) schedule(static)
+        for (uint32_t m = 0; m < kTileSize; ++m)
+            for (uint32_t n = 0; n < kTileSize; ++n)
+            {
+                const uint32_t kIndex = m * kTileSize + n;
+
+                const auto& kWaveVec = m_WaveVectors[kIndex];
+                m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) *
+                                          m_Height[kIndex];
+                m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) *
+                                          m_Height[kIndex];
+                m_dxDisplacementX[kIndex] = Complex(0, kWaveVec.vec.x) *
+                                            m_DisplacementX[kIndex];
+                m_dzDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.y) *
+                                            m_DisplacementZ[kIndex];
+            #ifdef COMPUTE_JACOBIAN
+                m_dzDisplacementX[kIndex] = Complex(0, kWaveVec.vec.y) *
+                                            m_DisplacementX[kIndex];
+                m_dxDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.x) *
+                                            m_DisplacementZ[kIndex];
+            #endif
+            }
+
+        #pragma omp sections
         {
-            #pragma omp for collapse(2) schedule(static)
-            for (uint32_t m = 0; m < kTileSize; ++m)
-                for (uint32_t n = 0; n < kTileSize; ++n)
-                {
-                    m_Height[m * kTileSize + n] =
-                        WaveHeightFT(m_BaseWaveHeights[m * kTileSize + n], t);
-                }
-
-            // Slopes for normals computation
-            #pragma omp for collapse(2) schedule(static) nowait
-            for (uint32_t m = 0; m < kTileSize; ++m)
-                for (uint32_t n = 0; n < kTileSize; ++n)
-                {
-                    const uint32_t kIndex = m * kTileSize + n;
-
-                    const auto& kWaveVec = m_WaveVectors[kIndex].vec;
-                    m_SlopeX[kIndex] = Complex(0, kWaveVec.x) * m_Height[kIndex];
-                    m_SlopeZ[kIndex] = Complex(0, kWaveVec.y) * m_Height[kIndex];
-                }
-
-            // Displacement vectors
-            #pragma omp for collapse(2) schedule(static) nowait
-            for (uint32_t m = 0; m < kTileSize; ++m)
-                for (uint32_t n = 0; n < kTileSize; ++n)
-                {
-                    const uint32_t kIndex = m * kTileSize + n;
-
-                    const auto& kWaveVec = m_WaveVectors[kIndex];
-                    m_DisplacementX[kIndex] = Complex(0, -kWaveVec.unit.x) *
-                                              m_Height[kIndex];
-                    m_DisplacementZ[kIndex] = Complex(0, -kWaveVec.unit.y) *
-                                              m_Height[kIndex];
-                    m_dxDisplacementX[kIndex] = Complex(0, kWaveVec.vec.x) *
-                                                m_DisplacementX[kIndex];
-                    m_dzDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.y) *
-                                                m_DisplacementZ[kIndex];
-                #ifdef COMPUTE_JACOBIAN
-                    m_dzDisplacementX[kIndex] = Complex(0, kWaveVec.vec.y) *
-                                                m_DisplacementX[kIndex];
-                    m_dxDisplacementZ[kIndex] = Complex(0, kWaveVec.vec.x) *
-                                                m_DisplacementZ[kIndex];
-                #endif
-                }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlanHeight);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlanSlopeX);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlanSlopeZ);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlanDisplacementX);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlanDisplacementZ);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlandxDisplacementX);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlandzDisplacementZ);
+            }
+        #ifdef COMPUTE_JACOBIAN
+            #pragma omp section
+            {
+                fftwf_execute(m_PlandzDisplacementX);
+            }
+            #pragma omp section
+            {
+                fftwf_execute(m_PlandxDisplacementZ);
+            }
+        #endif
         }
-    }
 
-    {
-        VKP_PROFILE_SCOPE("ComputeWaves::FFT");
+        float maxHeight = std::numeric_limits<float>::min();
+        float minHeight = std::numeric_limits<float>::max();
 
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_Height, (fftwf_complex*)m_Height);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_SlopeX, (fftwf_complex*)m_SlopeX);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_SlopeZ, (fftwf_complex*)m_SlopeZ);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_DisplacementX, (fftwf_complex*)m_DisplacementX);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_DisplacementZ, (fftwf_complex*)m_DisplacementZ);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_dxDisplacementX, (fftwf_complex*)m_dxDisplacementX);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_dzDisplacementZ, (fftwf_complex*)m_dzDisplacementZ);
-    #ifdef COMPUTE_JACOBIAN
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_dzDisplacementX, (fftwf_complex*)m_dzDisplacementX);
-        fftwf_execute_dft(m_Plan,
-            (fftwf_complex*)m_dxDisplacementZ, (fftwf_complex*)m_dxDisplacementZ);
-    #endif
-    }
+        // Conversion of the grid back to interval
+        //  [-m_TileSize/2, ..., 0, ..., m_TileSize/2]
+        const float kSigns[] = { 1.0f, -1.0f };
 
-    float maxHeight = std::numeric_limits<float>::min();
-    float minHeight = std::numeric_limits<float>::max();
-
-    // Conversion of the grid back to interval
-    //  [-m_TileSize/2, ..., 0, ..., m_TileSize/2]
-    const float kSigns[] = { 1.0f, -1.0f };
-
-    {
-        VKP_PROFILE_SCOPE("ComputeWaves::EndLoop");
-
+        #pragma omp for collapse(2) schedule(static) nowait
         for (uint32_t m = 0; m < kTileSize; ++m)
         {
             for (uint32_t n = 0; n < kTileSize; ++n)
@@ -271,7 +402,22 @@ float WSTessendorf::ComputeWaves(float t)
                 displacement.z =
                     static_cast<float>(sign) * m_Lambda * m_DisplacementZ[kIndex].real();
                 displacement.w = 1.0f;
+            }
+        }
+        // TODO reduction
+        #pragma omp critical
+        {
+            masterMaxHeight = glm::max(maxHeight, masterMaxHeight);
+            masterMinHeight = glm::min(minHeight, masterMinHeight);
+        }
 
+        #pragma omp for collapse(2) schedule(static) nowait
+        for (uint32_t m = 0; m < kTileSize; ++m)
+        {
+            for (uint32_t n = 0; n < kTileSize; ++n)
+            {
+                const uint32_t kIndex = m * kTileSize + n;
+                const int sign = kSigns[(n + m) & 1];
             #ifdef COMPUTE_JACOBIAN
                 const float jacobian =
                     (1.0f + m_Lambda * sign * m_dxDisplacementX[kIndex].real()) *
@@ -291,7 +437,7 @@ float WSTessendorf::ComputeWaves(float t)
         }
     }
 
-    return NormalizeHeights(minHeight, maxHeight);
+    return NormalizeHeights(masterMinHeight, masterMaxHeight);
 }
 
 float WSTessendorf::NormalizeHeights(float minHeight, float maxHeight)
