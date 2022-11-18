@@ -106,7 +106,7 @@ private:
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
-    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 340.f, -420.f };
+    static const inline glm::vec3 s_kCamStartPos{ 0.f, 340.f, -420.f };
 
     // Water Surfaces
     std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };

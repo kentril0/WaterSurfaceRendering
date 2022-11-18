@@ -129,12 +129,14 @@ private:
     {
         glm::vec2 vec;
         glm::vec2 unit;
-        WaveVector(const glm::vec2& v)
-            : vec(v)
-        {
-            const float k = glm::length(v);
-            unit = k < 0.00001f ? glm::vec2(0) : glm::normalize(v);
-        }
+
+        WaveVector(glm::vec2 v)
+            : vec(v),
+              unit(glm::length(v) > 0.00001f ? glm::normalize(v) : glm::vec2(0))
+        {}
+
+        WaveVector(glm::vec2 v, glm::vec2 u)
+            : vec(v), unit(u) {}
     };
 
     struct BaseWaveHeight
@@ -145,7 +147,10 @@ private:
     };
 
     std::vector<WaveVector> ComputeWaveVectors() const;
-    std::vector<BaseWaveHeight> ComputeBaseWaveHeightField() const;
+    std::vector<Complex> ComputeGaussRandomArray() const;
+    std::vector<BaseWaveHeight> ComputeBaseWaveHeightField(
+        const std::vector<Complex>& gaussRandomArray
+    ) const;
 
     /**
      * @brief Normalizes heights to interval <-1, 1>
@@ -206,7 +211,6 @@ private:
     Complex* m_dzDisplacementX{ nullptr };
 #endif
 
-    // TODO Profile: once plan is created, changing to another data pointers is fast
     fftwf_plan m_PlanHeight{ nullptr };
     fftwf_plan m_PlanSlopeX{ nullptr };
     fftwf_plan m_PlanSlopeZ{ nullptr };
@@ -219,8 +223,8 @@ private:
     fftwf_plan m_PlandzDisplacementX{ nullptr };
 #endif
 
-    float m_MinHeight{ -999.0 };
-    float m_MaxHeight{ 999.0 };
+    float m_MinHeight{ -1.0f };
+    float m_MaxHeight{ 1.0f };
 
 private:
     static constexpr float s_kG{ 9.81 };   ///< Gravitational constant
@@ -230,27 +234,24 @@ private:
      * @brief Realization of water wave height field in fourier domain
      * @return Fourier amplitudes of a wave height field
      */
-    Complex BaseWaveHeightFT(const glm::vec2 waveVec) const
+    Complex BaseWaveHeightFT(const Complex gaussRandom,
+                             const glm::vec2 unitWaveVec,
+                             float k) const
     {
-        return s_kOneOver2sqrt * Complex(glm::gaussRand(0.0f, 1.0f),
-                                         glm::gaussRand(0.0f, 1.0f))
-                               * glm::sqrt( PhillipsSpectrum(waveVec) );
+        return s_kOneOver2sqrt * gaussRandom *
+               glm::sqrt( PhillipsSpectrum(unitWaveVec, k) );
     }
 
    /**
      * @brief Phillips spectrum - wave spectrum, 
      *  a model for wind-driven waves larger than capillary waves
      */
-    float PhillipsSpectrum(const glm::vec2 waveVec) const
+    float PhillipsSpectrum(const glm::vec2 unitWaveVec, float k) const
     {
-        const float k  = glm::length(waveVec);
-        if (k < 0.000001f)      // zero div
-            return 0.0f;
-
         const float k2 = k * k;
         const float k4 = k2 * k2;
 
-        float cosFact = glm::dot(glm::normalize(waveVec), m_WindDir);
+        float cosFact = glm::dot(unitWaveVec, m_WindDir);
         cosFact = cosFact * cosFact;
 
         const float L = m_WindSpeed * m_WindSpeed / s_kG;

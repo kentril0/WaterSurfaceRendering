@@ -881,21 +881,20 @@ void WaterSurfaceMesh::ShowMeshSettings()
     if (ImGui::CollapsingHeader("Mesh settings",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
-        static int tileRes = s_kWSResolutions.GetIndex(m_TileSize);
-        const char* resName =
-            (tileRes >= 0 && tileRes < s_kWSResolutions.size())
-            ? s_kWSResolutions.strings[tileRes]
-            : "Unknown";
+        static int tileRes = s_kWSResolutions.GetIndex(m_TileSize) +1;
         static float tileLength = WSTessendorf::s_kDefaultTileLength;
         static float vertexDist = tileLength / static_cast<float>(m_TileSize);
 
         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
 
+        tileRes = glm::clamp(tileRes, 0, (int)(s_kWSResolutions.size()-1));
+        const char* resName = s_kWSResolutions.strings[tileRes];
+
         ImGui::SliderInt("Tile Resolution", &tileRes, 0,
                          s_kWSResolutions.size() -1, resName);
         int tileSize = s_kWSResolutions[tileRes];
 
-        ImGui::DragFloat("Tile Length", &tileLength, 10.f, 10.f, 10000.0f);
+        ImGui::DragFloat("Tile Length##1", &tileLength, 10.f, 10.f, 10000.0f);
         vertexDist = tileLength / static_cast<float>(tileSize);
 
         ImGui::DragFloat("Vertex Distance", &vertexDist, 0.1f, 0.1f, 100.0f);
