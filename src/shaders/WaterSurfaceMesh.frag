@@ -9,16 +9,26 @@ layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 {
     vec3  camPos;
-    vec3  sunDir;
-    vec4  sunColor;  // vec4( vec3(sunColor), sunIntensity )
-    // ----
     float terrainDepth;
-    float skyIntensity;
-    float specularIntensity;
-    float specularHighlights;
     vec3 absorpCoef;
     vec3 scatterCoef;
     vec3 backscatterCoef;
+    // ------------ Sky
+    float skyIntensity;
+    float specularIntensity;
+    float specularHighlights;
+    vec3  sunColor;
+    float sunIntensity;
+    // ------------- Preetham Sky
+    vec3  sunDir;
+    float turbidity;
+    vec3 A;
+    vec3 B;
+    vec3 C;
+    vec3 D;
+    vec3 E;
+    vec3 ZenithLum;
+    vec3 ZeroThetaSun;
 } surface;
 
 #define M_PI 3.14159265358979323846
@@ -39,12 +49,12 @@ struct Ray
     vec3 dir;
 };
 
-vec3 SkyColor(const in Ray ray)
-{
-    float y = ray.dir.y;
-    y = (max(y,0.0)*0.8+0.2)*0.8;
-    return vec3(pow(1.0-y,2.0), 1.0-y, 0.6+(1.0-y)*0.4) * 1.1;
-}
+/**
+ * @brief Returns sky luminance at view direction
+ * @param kSunDir Normalized vector to sun
+ * @param kViewDir Normalized vector to eye
+ */
+vec3 SkyLuminance(const in vec3 kSunDir, const in vec3 kViewDir);
 
 /**
  * @brief Finds an intersection point of ray with the terrain
@@ -122,12 +132,14 @@ vec3 ComputeWaterSurfaceColor(
     vec3 L_a;
     {
         const vec3 kViewReflect = reflect(kViewDir, kNormal);
-        L_a = SkyColor(Ray(p_w, kViewReflect)) * surface.skyIntensity;
+        L_a = SkyLuminance(kLightDir, kViewReflect) * surface.skyIntensity;
+        //L_a = SkyLuminance(kLightDir, kViewDir) * surface.skyIntensity;
 
         // Sun diffuse contribution - hitting the surface directly
         // TODO should be already in the sky model?
         const float kNormalDotLight = max(dot(kNormal, kLightDir), 0.0f);
-        L_a += surface.sunColor.a * surface.sunColor.rgb * kNormalDotLight;
+        //L_a += surface.sunIntensity * surface.sunColor.rgb * kNormalDotLight;
+        L_a += surface.sunIntensity * SkyLuminance(kLightDir, -kViewDir) * kNormalDotLight;
     }
 
     // Amount of light coming directly from the sun reflected to the camera
@@ -153,7 +165,9 @@ vec3 ComputeWaterSurfaceColor(
                 , 0.0, 1.0);
     #endif
 
-        L_s = surface.sunColor.a * surface.sunColor.rgb * specular;
+        //L_s = surface.sunIntensity * surface.sunColor.rgb * specular;
+        L_s = surface.sunIntensity * specular *
+              SkyLuminance(kLightDir, -kViewDir);
     }
 
     // Light just below the surface transmitted through into the air
@@ -185,6 +199,7 @@ vec3 ComputeWaterSurfaceColor(
 
 void main ()
 {
+    // TODO WRONG
     const Ray ray = Ray(surface.camPos, normalize(inPos.xyz-surface.camPos));
     const vec3 kNormal = normalize( inNormal );
 
@@ -194,9 +209,10 @@ void main ()
     if (inPos.w < 0.0)
         color = vec3(1.0);
 
-    // TODO color correction, grading
+    fragColor = vec4(color, 1.0);
 
-    fragColor = vec4( color ,1.0);
+    // Tone mapping
+    fragColor = vec4(1.0) - exp(-fragColor * 2.0f);
 }
 
 
@@ -288,3 +304,81 @@ float Fbm4Noise2D(in vec2 p)
     }
     return value;
 }
+
+// =============================================================================
+// Preetham Sky
+
+float SaturateDot(const in vec3 v, const in vec3 u)
+{
+    return max( dot(v,u), 0.0f );
+}
+
+vec3 ComputePerezLuminanceYxy(const in float theta, const in float gamma)
+{
+    return (1.f + surface.A * exp( surface.B / cos(theta) ) ) *
+           (1.f + surface.C * exp( surface.D * gamma) +
+            surface.E * cos(gamma) * cos(gamma) );
+}
+
+vec3 ComputeSkyLuminance(const in vec3 kSunDir, const in vec3 kViewDir)
+{
+    const float thetaView = acos( SaturateDot(kViewDir, vec3(0,1,0)) );
+    const float gammaView = acos( SaturateDot(kSunDir, kViewDir) );
+
+    const vec3 fThetaGamma = ComputePerezLuminanceYxy(thetaView, gammaView);
+    
+    return surface.ZenithLum * (fThetaGamma / surface.ZeroThetaSun);
+}
+
+vec3 YxyToRGB(const in vec3 Yxy);
+
+vec3 SkyLuminance(const in vec3 kSunDir, const in vec3 kViewDir)
+{
+    //const vec3 kSunDisk = surface.sunColor.rgb *
+    //                      smoothstep(0.9975f, 1.02f,
+    //                                 SaturateDot(kViewDir, kSunDir) );
+    const float kSunDisk = smoothstep(0.9975f, 1.02f,
+                                     SaturateDot(kViewDir, kSunDir) );
+
+    const vec3 kSkyLuminance = YxyToRGB( ComputeSkyLuminance(kSunDir, kViewDir) );
+    return kSkyLuminance * 0.05f + kSunDisk * kSkyLuminance;
+}
+
+// =============================================================================
+// Althar. Preetham Sky. [online]. Shadertoy.com. 2015.
+// https://www.shadertoy.com/view/llSSDR
+
+vec3 YxyToXYZ( const in vec3 Yxy )
+{
+    const float Y = Yxy.r;
+    const float x = Yxy.g;
+    const float y = Yxy.b;
+
+    const float X = x * ( Y / y );
+    const float Z = ( 1.0 - x - y ) * ( Y / y );
+
+    return vec3(X,Y,Z);
+}
+
+vec3 XYZToRGB( const in vec3 XYZ )
+{
+    // CIE/E
+    const mat3 M = mat3
+    (
+         2.3706743, -0.9000405, -0.4706338,
+        -0.5138850,  1.4253036,  0.0885814,
+          0.0052982, -0.0146949,  1.0093968
+    );
+
+    return XYZ * M;
+}
+
+
+vec3 YxyToRGB( const in vec3 Yxy )
+{
+    const vec3 XYZ = YxyToXYZ( Yxy );
+    const vec3 RGB = XYZToRGB( XYZ );
+    return RGB;
+}
+
+// =============================================================================

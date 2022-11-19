@@ -27,8 +27,8 @@ WaterSurfaceMesh::WaterSurfaceMesh(
     const vkp::Device& device,
     const vkp::DescriptorPool& descriptorPool
 )
-    : m_Device(device),
-      m_DescriptorPool(descriptorPool)
+    : m_kDevice(device),
+      m_kDescriptorPool(descriptorPool)
 {
     VKP_REGISTER_FUNCTION();
 
@@ -58,7 +58,7 @@ void WaterSurfaceMesh::CreateRenderData(
     CreatePipeline(kFramebufferExtent,
                    renderPass,
                    kFramebufferHasDepthAttachment);
-
+    
     const bool kImageCountChanged = m_UniformBuffers.size() != kImageCount;
     if (kImageCountChanged)
     {
@@ -113,7 +113,7 @@ void WaterSurfaceMesh::UpdateMeshBuffers(VkCommandBuffer cmdBuffer)
         return;
 
     m_StagingBuffer->FlushMappedRange(
-        m_Device.GetNonCoherentAtomSizeAlignment(
+        m_kDevice.GetNonCoherentAtomSizeAlignment(
             AlignSizeTo(m_Mesh->GetVerticesSize() + m_Mesh->GetIndicesSize(),
                         vkp::Texture2D::FormatToBytes(s_kMapFormat) )
         )
@@ -158,7 +158,8 @@ void WaterSurfaceMesh::PrepareRender(
     VkCommandBuffer cmdBuffer,
     const glm::mat4& viewMat,
     const glm::mat4& projMat,
-    const glm::vec3& camPos
+    const glm::vec3& camPos,
+    const SkyModel::Params& skyParams
 )
 {
     m_VertexUBO.model = glm::mat4(1.0f);
@@ -168,20 +169,18 @@ void WaterSurfaceMesh::PrepareRender(
     // Vulkan uses inverted Y coord in comparison to OpenGL (set by glm lib)
     // -> flip the sign on the scaling factor of the Y axis
     m_VertexUBO.proj[1][1] *= -1;
-
     m_VertexUBO.WSChoppy = m_ModelTess->GetDisplacementLambda();
     
     m_WaterSurfaceUBO.camPos = camPos;
-    if (m_ClampDepth)
+    if (m_ClampTerrainDepth)
     {
         m_WaterSurfaceUBO.terrainDepth = glm::min(m_WaterSurfaceUBO.terrainDepth,
                                                   m_ModelTess->GetMinHeight());
     }
-
+    m_WaterSurfaceUBO.sky = skyParams;
+    
     UpdateUniformBuffer(frameIndex);
-
     UpdateMeshBuffers(cmdBuffer);
-
     UpdateDescriptorSet(frameIndex);
 
 #ifndef DOUBLE_BUFFERED
@@ -253,7 +252,7 @@ void WaterSurfaceMesh::UpdateUniformBuffer(const uint32_t imageIndex)
     buffer.CopyToMapped(&m_WaterSurfaceUBO, sizeof(m_WaterSurfaceUBO),
         static_cast<void*>(
             static_cast<uint8_t*>(dataAddr) + 
-            m_Device.GetUniformBufferAlignment(sizeof(VertexUBO))
+            m_kDevice.GetUniformBufferAlignment(sizeof(VertexUBO))
         )
     );
 
@@ -288,7 +287,7 @@ void WaterSurfaceMesh::UpdateDescriptorSet(const uint32_t frameIndex)
 
     bufferInfos[1].buffer = m_UniformBuffers[frameIndex];
     bufferInfos[1].offset = 
-        m_Device.GetUniformBufferAlignment(sizeof(VertexUBO));
+        m_kDevice.GetUniformBufferAlignment(sizeof(VertexUBO));
     bufferInfos[1].range = sizeof(WaterSurfaceUBO);
 
     // Add Water Surface textures
@@ -310,7 +309,7 @@ void WaterSurfaceMesh::UpdateDescriptorSet(const uint32_t frameIndex)
     imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     vkp::DescriptorWriter descriptorWriter(*m_DescriptorSetLayout,
-                                           m_DescriptorPool);
+                                           m_kDescriptorPool);
     uint32_t binding = 0;
 
     descriptorWriter
@@ -340,7 +339,7 @@ void WaterSurfaceMesh::CreateDescriptorSetLayout()
 
     uint32_t bindingPoint = 0;
 
-    m_DescriptorSetLayout = vkp::DescriptorSetLayout::Builder(m_Device)
+    m_DescriptorSetLayout = vkp::DescriptorSetLayout::Builder(m_kDevice)
         // VertexUBO
         .AddBinding({
             .binding = bindingPoint++,
@@ -373,21 +372,20 @@ void WaterSurfaceMesh::CreateUniformBuffers(const uint32_t kBufferCount)
     VKP_REGISTER_FUNCTION();
 
     const VkDeviceSize kBufferSize = 
-        m_Device.GetUniformBufferAlignment(sizeof(VertexUBO)) +
-        m_Device.GetUniformBufferAlignment(sizeof(WaterSurfaceUBO));
+        m_kDevice.GetUniformBufferAlignment(sizeof(VertexUBO)) +
+        m_kDevice.GetUniformBufferAlignment(sizeof(WaterSurfaceUBO));
 
     m_UniformBuffers.reserve(kBufferCount);
 
     for (uint32_t i = 0; i < kBufferCount; ++i)
     {
-        m_UniformBuffers.emplace_back(m_Device);
+        auto& buffer = m_UniformBuffers.emplace_back(m_kDevice);
 
-        m_UniformBuffers[i].Create(kBufferSize,
-                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        buffer.Create(kBufferSize,
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-        // Keep each buffer mapped
-        auto err = m_UniformBuffers[i].Map();
+        auto err = buffer.Map();
         VKP_ASSERT_RESULT(err);
     }
 }
@@ -405,7 +403,7 @@ std::vector<
     for (uint32_t i = 0; i < kShaderInfoCount; ++i)
     {
         shaders[i] = std::make_shared<vkp::ShaderModule>(
-            m_Device, kShaderInfos[i]
+            m_kDevice, kShaderInfos[i]
         );
     }
 
@@ -422,7 +420,7 @@ void WaterSurfaceMesh::SetupPipeline()
                                              s_kShaderInfos.size());
 
     m_Pipeline = std::make_unique<vkp::Pipeline>(
-        m_Device, shaders
+        m_kDevice, shaders
     );
 
     VKP_ASSERT(m_DescriptorSetLayout != nullptr);
@@ -452,7 +450,7 @@ void WaterSurfaceMesh::CreateDescriptorSets(const uint32_t kCount)
     VkResult err;
     for (auto& set : m_DescriptorSets)
     {
-        err = m_DescriptorPool.AllocateDescriptorSet(
+        err = m_kDescriptorPool.AllocateDescriptorSet(
             *m_DescriptorSetLayout,
             set.set
         );
@@ -469,7 +467,7 @@ void WaterSurfaceMesh::CreatePipeline(
     VKP_REGISTER_FUNCTION();
     VKP_ASSERT(m_Pipeline != nullptr);
 
-    m_Device.QueueWaitIdle(vkp::QFamily::Graphics);
+    m_kDevice.QueueWaitIdle(vkp::QFamily::Graphics);
 
     m_Pipeline->Create(framebufferExtent,
                        renderPass,
@@ -494,7 +492,7 @@ void WaterSurfaceMesh::CreateMesh()
     const VkDeviceSize kMaxIndicesSize = sizeof(uint32_t) * GetMaxIndexCount();
 
     m_Mesh.reset(
-        new Mesh<Vertex>(m_Device, kMaxVerticesSize, kMaxIndicesSize)
+        new Mesh<Vertex>(m_kDevice, kMaxVerticesSize, kMaxIndicesSize)
     );
 }
 
@@ -571,7 +569,7 @@ std::vector<uint32_t> WaterSurfaceMesh::CreateGridIndices(
 
 void WaterSurfaceMesh::CreateStagingBuffer()
 {
-    m_StagingBuffer.reset( new vkp::Buffer(m_Device) );
+    m_StagingBuffer.reset( new vkp::Buffer(m_kDevice) );
 
     const VkDeviceSize kVerticesSize = sizeof(Vertex) * GetMaxVertexCount();
     const VkDeviceSize kIndicesSize = sizeof(uint32_t) * GetMaxIndexCount();
@@ -598,7 +596,7 @@ void WaterSurfaceMesh::CreateFrameMaps(VkCommandBuffer cmdBuffer)
 {
     VKP_REGISTER_FUNCTION();
 
-    m_Device.QueueWaitIdle(vkp::QFamily::Graphics);
+    m_kDevice.QueueWaitIdle(vkp::QFamily::Graphics);
 
     // Create frame map pair for each water surface resolution
     m_FrameMaps.resize(s_kWSResolutions.size());
@@ -630,7 +628,7 @@ std::unique_ptr<vkp::Texture2D> WaterSurfaceMesh::CreateMap(
 {
     VKP_REGISTER_FUNCTION();
 
-    auto map = std::make_unique<vkp::Texture2D>(m_Device);
+    auto map = std::make_unique<vkp::Texture2D>(m_kDevice);
 
     map->Create(cmdBuffer, kSize, kSize, kMapFormat,
                 kUseMipMapping,
@@ -746,7 +744,7 @@ void WaterSurfaceMesh::CopyModelTessDataToStagingBuffer()
     }
 
     m_StagingBuffer->FlushMappedRange(
-        m_Device.GetNonCoherentAtomSizeAlignment(
+        m_kDevice.GetNonCoherentAtomSizeAlignment(
             AlignSizeTo(m_Mesh->GetVerticesSize() + m_Mesh->GetIndicesSize(),
                         vkp::Texture2D::FormatToBytes(s_kMapFormat) ) +
             kDisplacementsSize +
@@ -940,43 +938,12 @@ static void ShowComboBox(const char* name,
     }
 }
 
-static glm::vec3 GetDirFromAngles(float inclination, float azimuth)
-{
-    return glm::normalize(
-        glm::vec3( glm::sin(inclination) * glm::cos(azimuth),
-                   glm::cos(inclination),
-                   glm::sin(inclination) * glm::sin(azimuth) )
-    );
-}
-
 void WaterSurfaceMesh::ShowLightingSettings()
 {
     if (ImGui::CollapsingHeader("Lighting settings",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
-        static float sunAzimuth = glm::radians(90.0f);        // [-pi, pi]
-        static float sunInclination = glm::radians(22.0f);    // [-pi/2, pi/2]
-
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.29f);
-        {
-            bool s = ImGui::SliderAngle("##Sun Inclination",
-                                        &sunInclination, -90.f, 90.f);
-            ImGui::SameLine();
-            bool s1 = ImGui::SliderAngle("Sun angles##Sun Azimuth",
-                                         &sunAzimuth, -180.f, 180.f);
-            if (s || s1)
-            {
-                m_WaterSurfaceUBO.sunDir =
-                    GetDirFromAngles(sunInclination, sunAzimuth);
-            }
-        }
-        ImGui::PopItemWidth();
         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-
-        ImGui::DragFloat3("Sun direction",
-                          glm::value_ptr(m_WaterSurfaceUBO.sunDir), 0.1f);
-        ImGui::SliderFloat("Sun intensity", &m_WaterSurfaceUBO.sunColor.a, 0.f, 10.f);
-        ImGui::ColorEdit3("Sun color", glm::value_ptr(m_WaterSurfaceUBO.sunColor));
 
         ImGui::SliderFloat("Sky Intensity",
                            &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
@@ -1025,7 +992,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
             // Terrain
             ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
                              1.0f, -999.0f, 0.0f);
-            ImGui::Checkbox(" Clamp depth to surface height", &m_ClampDepth);
+            ImGui::Checkbox(" Clamp depth to surface height", &m_ClampTerrainDepth);
 
             ImGui::TreePop();
         }
@@ -1041,7 +1008,7 @@ void WaterSurfaceMesh::RecompileShaders(
     const bool kFramebufferHasDepthAttachment
 )
 {
-    const bool kNeedsRecreation = m_Pipeline->RecompileShaders();
+    bool kNeedsRecreation = m_Pipeline->RecompileShaders();
     if (kNeedsRecreation)
     {
         CreatePipeline(kFramebufferExtent,
