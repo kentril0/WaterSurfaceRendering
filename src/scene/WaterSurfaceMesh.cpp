@@ -778,14 +778,6 @@ void WaterSurfaceMesh::ShowGUISettings()
     {
         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
             ShowWaterSurfaceSettings();
-
-        if ( ImGui::TreeNodeEx("Water Properties and Lighting") )
-                              //, ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ShowLightingSettings();
-            ImGui::TreePop();
-        }
-
         ImGui::PopItemWidth();
         ImGui::NewLine();
     }
@@ -836,6 +828,13 @@ void WaterSurfaceMesh::ShowWaterSurfaceSettings()
                          "%.2f");
         ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
                          "%.4f");
+        ImGui::TreePop();
+    }
+
+    if ( ImGui::TreeNodeEx("Water Properties and Lighting") )
+                          //, ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ShowLightingSettings();
         ImGui::TreePop();
     }
 
