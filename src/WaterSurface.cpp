@@ -56,6 +56,7 @@ void WaterSurface::SetupAssets()
 
     CreateCamera();
     CreateWaterSurfaceMesh();
+    CreateSkyModel();
 }
 
 void WaterSurface::CreateWaterSurfaceMesh()
@@ -78,6 +79,20 @@ void WaterSurface::CreateWaterSurfaceMesh()
     EndOneTimeCommands(cmdBuffer);
 }
 
+void WaterSurface::CreateSkyModel()
+{
+    m_Sky.reset(
+        new SkyModel(*m_Device, *m_DescriptorPool, s_kStartSunDir)
+    );
+
+    m_Sky->CreateRenderData(
+        *m_RenderPass,
+        m_SwapChain->GetImageCount(),
+        m_SwapChain->GetExtent(),
+        m_SwapChain->HasDepthAttachment()
+    );
+}
+
 void WaterSurface::OnFrameBufferResize(int width, int height)
 {
     // Application
@@ -94,9 +109,17 @@ void WaterSurface::OnFrameBufferResize(int width, int height)
     CreateDrawCommandPools(kImageCount);
     CreateDrawCommandBuffers();
 
+    // -----------------------------------------------------
     // Assets
 
     m_WaterSurfaceMesh->CreateRenderData(
+        *m_RenderPass,
+        m_SwapChain->GetImageCount(),
+        m_SwapChain->GetExtent(),
+        m_SwapChain->HasDepthAttachment()
+    );
+
+    m_Sky->CreateRenderData(
         *m_RenderPass,
         m_SwapChain->GetImageCount(),
         m_SwapChain->GetExtent(),
@@ -114,6 +137,7 @@ void WaterSurface::Update(vkp::Timestep dt)
 
     UpdateCamera(dt);
 
+    m_Sky->Update(dt);
     m_WaterSurfaceMesh->Update(dt);
 }
 
@@ -129,17 +153,34 @@ void WaterSurface::Render(
     vkp::CommandBuffer& commandBuffer = drawCmdPool.Front();
     commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
+        const VkExtent2D kSwapChainExtent = m_SwapChain->GetExtent();
+
+        m_Sky->PrepareRender(
+            frameIndex,
+            glm::vec2(kSwapChainExtent.width, kSwapChainExtent.height),
+            m_Camera->GetPosition(),
+            m_Camera->GetView(),
+            m_Camera->GetFov()
+        );
+
         // Copy to water surface maps, update uniform buffers
         m_WaterSurfaceMesh->PrepareRender(
             frameIndex, commandBuffer,
-            m_Camera->GetViewMat(), m_Camera->GetProjMat(),
-            m_Camera->GetPosition()
+            m_Camera->GetViewMat(),
+            m_Camera->GetProjMat(),
+            m_Camera->GetPosition(),
+            m_Sky->GetParams()
         );
 
         BeginRenderPass(
             commandBuffer,
             m_SwapChain->GetFramebuffer(frameIndex)
         );
+
+        // TODO optimize - render last
+        // Render sky first - rendered in the background,
+        //  does not write into depth attachment
+        m_Sky->Render(frameIndex, commandBuffer);
 
         m_WaterSurfaceMesh->Render(frameIndex, commandBuffer);
 
@@ -213,7 +254,7 @@ void WaterSurface::CreateDescriptorPool()
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             m_SwapChain->GetImageCount() * 10
         )
-        .Build(m_SwapChain->GetImageCount());
+        .Build(m_SwapChain->GetImageCount() * 2);
 }
 
 // -----------------------------------------------------------------------------
@@ -387,6 +428,7 @@ void WaterSurface::UpdateGui()
 
     ShowCameraSettings();
     m_WaterSurfaceMesh->ShowGUISettings();
+    m_Sky->ShowGUISettings();
 
     ImGui::End();
 }
