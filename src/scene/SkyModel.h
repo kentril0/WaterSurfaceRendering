@@ -111,7 +111,7 @@ private:
             .isSPV = false
         },
         vkp::ShaderInfo{
-            .paths = { "../src/shaders/SkyPreetham.frag" },
+            .paths = { "shaders/SkyPreetham.frag" },
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
             .isSPV = false
         }
