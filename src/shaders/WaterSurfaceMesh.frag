@@ -9,6 +9,7 @@ layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 {
     vec3  camPos;
+    vec3 terrainColor;
     float terrainDepth;
     vec3 absorpCoef;
     vec3 scatterCoef;
@@ -90,8 +91,9 @@ float FresnelFull(in float theta_i, in float theta_t)
 
 vec3 Attenuate(const in float kDistance, const in float kDepth)
 {
-    return exp(-surface.absorpCoef  * 0.1f * kDistance 
-               -surface.scatterCoef * 0.1f * kDepth);
+    const float kScale = 0.1;
+    return exp(-surface.absorpCoef  * kScale * kDistance 
+               -surface.scatterCoef * kScale * kDepth);
 }
 
 /**
@@ -125,22 +127,21 @@ vec3 ComputeWaterSurfaceColor(
     const in vec3 p_w,
     const in vec3 kNormal)
 {
-    const vec3 kViewDir = vec3(-ray.dir);
     const vec3 kLightDir = normalize(surface.sunDir);
+
+    // Reflection of camera ray
+    const vec3 kReflectDir = reflect(ray.dir, kNormal);
+    const vec3 kSkyReflected = SkyLuminance(kLightDir, kReflectDir);
 
     // Diffuse atmospheric skylight
     vec3 L_a;
     {
-        const vec3 kViewReflect = reflect(kViewDir, kNormal);
-        L_a = SkyLuminance(kLightDir, kViewReflect) * surface.skyIntensity;
-        //L_a = SkyLuminance(kLightDir, kViewDir) * surface.skyIntensity;
-
-        // Sun diffuse contribution - hitting the surface directly
-        // TODO should be already in the sky model?
-        const float kNormalDotLight = max(dot(kNormal, kLightDir), 0.0f);
-        //L_a += surface.sunIntensity * surface.sunColor.rgb * kNormalDotLight;
-        L_a += surface.sunIntensity * SkyLuminance(kLightDir, -kViewDir) * kNormalDotLight;
+        const float kNdL = max(dot(kNormal, kLightDir), 0.0);
+        L_a = surface.skyIntensity * kNdL * kSkyReflected;
     }
+
+    // Direction to camera
+    const vec3 kViewDir = vec3(-ray.dir);
 
     // Amount of light coming directly from the sun reflected to the camera
     vec3 L_s;
@@ -165,17 +166,16 @@ vec3 ComputeWaterSurfaceColor(
                 , 0.0, 1.0);
     #endif
 
-        //L_s = surface.sunIntensity * surface.sunColor.rgb * specular;
-        L_s = surface.sunIntensity * specular *
-              SkyLuminance(kLightDir, -kViewDir);
+        L_s = surface.sunIntensity * specular * kSkyReflected;
     }
 
-    // Light just below the surface transmitted through into the air
     const vec3 kRefractDir = RefractAirIncident(-kLightDir, kNormal);
+
+    // Light just below the surface transmitted through into the air
     vec3 L_u;
     {
         // Downwelling irradiance just below the water surface
-        const vec3 E_d0 = M_PI*L_a;
+        const vec3 E_d0 = M_PI * L_a;
 
         // Constant diffuse radiance just below the surface from sun and sky
         const vec3 L_df0 = (0.33*surface.backscatterCoef) /
@@ -187,19 +187,18 @@ vec3 ComputeWaterSurfaceColor(
         const vec3 p_g = kRefractRay.org + t_g * kRefractRay.dir;
         const vec3 L_g = ComputeTerrainRadiance(p_g, kRefractRay.dir);
 
-        L_u = Attenuate(t_g, 0.0) * L_g +
-              ( 1.0-Attenuate(t_g, abs(p_w.y - p_g.y) ) ) * L_df0;
+        L_u =        Attenuate(t_g, 0.0)                   * L_g +
+              (1.0 - Attenuate(t_g, abs(p_w.y - p_g.y) ) ) * L_df0;
     }
 
     // Fresnel reflectivity to the camera
-    float F_r = FresnelFull( dot(kViewDir,kNormal), dot(-kNormal,kRefractDir) );
+    float F_r = FresnelFull( dot(kNormal, kViewDir), dot(-kNormal, kRefractDir) );
 
     return F_r*(L_s + L_a) + (1.0-F_r)*L_u;
 }
 
 void main ()
 {
-    // TODO WRONG
     const Ray ray = Ray(surface.camPos, normalize(inPos.xyz-surface.camPos));
     const vec3 kNormal = normalize( inNormal );
 
@@ -223,7 +222,7 @@ float Fbm4Noise2D(in vec2 p);
 
 float TerrainHeight(const in vec2 p)
 {
-    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.02 * 2.);
+    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.005);
 }
 
 vec3 TerrainNormal(const in vec2 p)
@@ -235,7 +234,7 @@ vec3 TerrainNormal(const in vec2 p)
         vec3(
             // x + offset
             TerrainHeight(p - kEpsilon.xy) - TerrainHeight(p + kEpsilon.xy), 
-            2.0f * kEpsilon.x,
+            10.0f * kEpsilon.x,
             // z + offset
             TerrainHeight(p - kEpsilon.yx) - TerrainHeight(p + kEpsilon.yx)
         )
@@ -244,10 +243,10 @@ vec3 TerrainNormal(const in vec2 p)
 
 vec3 TerrainColor(const in vec2 p)
 {
-    const vec3 kMate = vec3(0.964, 1.0, 0.824);
+    //const vec3 kMate = vec3(0.964, 1.0, 0.824);
     float n = clamp(Fbm4Noise2D(p.yx * 0.02 * 2.), 0.6, 0.9);
 
-    return n * kMate;
+    return n * surface.terrainColor;
 }
 
 float IntersectTerrain(const in Ray ray)
@@ -334,11 +333,8 @@ vec3 YxyToRGB(const in vec3 Yxy);
 
 vec3 SkyLuminance(const in vec3 kSunDir, const in vec3 kViewDir)
 {
-    //const vec3 kSunDisk = surface.sunColor.rgb *
-    //                      smoothstep(0.9975f, 1.02f,
-    //                                 SaturateDot(kViewDir, kSunDir) );
-    const float kSunDisk = smoothstep(0.9975f, 1.02f,
-                                     SaturateDot(kViewDir, kSunDir) );
+    const float kSunDisk = smoothstep(0.997f, 1.f,
+                                      SaturateDot(kViewDir, kSunDir) );
 
     const vec3 kSkyLuminance = YxyToRGB( ComputeSkyLuminance(kSunDir, kViewDir) );
     return kSkyLuminance * 0.05f + kSunDisk * kSkyLuminance;
