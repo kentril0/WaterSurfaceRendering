@@ -18,6 +18,7 @@
 
 #include "scene/Mesh.h"
 #include "scene/WSTessendorf.h"
+#include "scene/SkyModel.h"
 
 #include "Gui.h"
 
@@ -69,7 +70,9 @@ public:
         VkCommandBuffer cmdBuffer,
         const glm::mat4& viewMat,
         const glm::mat4& projMat,
-        const glm::vec3& camPos);
+        const glm::vec3& camPos,
+        const SkyModel::Params& skyParams
+    );
  
     void Render(
         const uint32_t frameIndex,
@@ -158,13 +161,11 @@ private:
 
 private:
 
-    // =========================================================================
-    // Vulkan
-
-    const vkp::Device& m_Device;
-
+    const vkp::Device& m_kDevice;
     // TODO static GetDescriptorPoolSizes
-    const vkp::DescriptorPool& m_DescriptorPool;
+    const vkp::DescriptorPool& m_kDescriptorPool;
+
+    // =========================================================================
 
     static const inline std::array<vkp::ShaderInfo, 2> s_kShaderInfos {
         vkp::ShaderInfo{
@@ -181,21 +182,18 @@ private:
 
     std::unique_ptr<vkp::DescriptorSetLayout> m_DescriptorSetLayout{ nullptr };
 
-    struct DescriptorSetStatus
+    struct DescriptorSet
     {
         bool            isDirty{ true };
-        VkDescriptorSet set{ VK_NULL_HANDLE };
+        VkDescriptorSet set    { VK_NULL_HANDLE };
     };
-    std::vector<DescriptorSetStatus>              m_DescriptorSets;
+    std::vector<DescriptorSet> m_DescriptorSets;
 
-    // Uniform buffer for each swap chain image
-    //   Cleanup after fininshed rendering or on swap chain recreation
     std::vector<vkp::Buffer> m_UniformBuffers;
 
     std::unique_ptr<vkp::Pipeline> m_Pipeline{ nullptr };
 
     // =========================================================================
-
     // Mesh properties
     std::unique_ptr< Mesh<Vertex> > m_Mesh{ nullptr };
 
@@ -256,29 +254,31 @@ private:
         float WSHeightAmp;
         float WSChoppy;
     };
+    VertexUBO m_VertexUBO{};
 
     struct WaterSurfaceUBO
     {
         alignas(16) glm::vec3 camPos;
-        alignas(16) glm::vec3 sunDir{ 0.0, 1.0, 0.4 };
-        //                    vec4(vec3(suncolor), sunIntensity)
-        alignas(16) glm::vec4 sunColor   { 0.7, 0.45, 0.3, 1.0 };
         float terrainDepth{ -999.0};
-        float skyIntensity{ 1.0 };
-        float specularIntensity{ 10.0 };
+        alignas(16) glm::vec3 absorpCoef{ s_kWaterTypesCoeffsAccurate[0] };
+        alignas(16) glm::vec3 scatterCoef{
+            ComputeScatteringCoefPA01(s_kScatterCoefLambda0[0])
+        };
+        alignas(16) glm::vec3 backscatterCoef{
+            ComputeBackscatteringCoefPA01(scatterCoef)
+        };
+        // -------------------------------------------------
+        float skyIntensity      { 1.0 };
+        float specularIntensity { 10.0 };
         float specularHighlights{ 32.0 };
-        alignas(16) glm::vec3 absorpCoef;
-        alignas(16) glm::vec3 scatterCoef;
-        alignas(16) glm::vec3 backscatterCoef;
+        SkyModel::Params sky;
     };
-
-    VertexUBO m_VertexUBO{};
     WaterSurfaceUBO m_WaterSurfaceUBO{};
 
     // -------------------------------------------------------------------------
     // GUI stuff
 
-    bool m_ClampDepth{ true };
+    bool m_ClampTerrainDepth{ true };
 
     // Should correspond to s_kMaxTileSize and s_kMinTileSize range
     static const inline gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{
@@ -286,7 +286,13 @@ private:
         { "16", "32", "64", "128", "256", "512", "1024" }
     };
 
-    // Jerlov water types: a classification based on coefficient K_d(\lambda) (diffuse attenuation coefficient for downwelling irradiance) [PA01]
+
+    // =========================================================================
+    // Jerlov water types: a classification based on coefficient K_d(\lambda)
+
+    // [PA01] Premože S., Ashikhmin M. *Rendering Natural Waters*.
+    //      Computer Graphics forum. EUROGRAPHICS 2001.  
+    //(diffuse attenuation coefficient for downwelling irradiance) [PA01]
     // twelve water types with assigned K_d(\lambda) spectrum
     //  I to III are for open ocean waters:
     //      with type I being the clearest, type III being the most turbid
@@ -295,11 +301,11 @@ private:
     static const inline glm::vec3 s_kWavelengthsRGB_m{ 680e-9, 550e-9, 440e-9};
     static const inline glm::vec3 s_kWavelengthsRGB_nm{ 680, 550, 440 };
 
-    uint32_t m_WaterTypeCoefIndex{ 0 };
     // Values of K_d for wavelengths: Red (680 nm), Green (550 nm), Blue (440 nm)
     //  INTERPOLATED from measured data in [PA01]
     // In m^-1
-    static const inline gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsApprox{
+    static const inline gui::ValueStringArray<glm::vec3, 8> 
+        s_kWaterTypesCoeffsApprox{
         { glm::vec3{0.448, 0.063, 0.0202},
           glm::vec3{0.494, 0.089, 0.0732},
           glm::vec3{0.548, 0.120, 0.145 },
@@ -324,9 +330,10 @@ private:
     static const inline glm::vec3 s_kWavelengthsData_nm{ 675, 550, 450 };
 
     // Values of K_d for wavelengths: Red (675 nm), Green (550 nm), Blue (450 nm)
-    //  real measured data from [PA01]  
+    //  real measured data from [PA01]
     // In m^-1
-    static const inline gui::ValueStringArray<glm::vec3, 8> s_kWaterTypesCoeffsAccurate{
+    static const inline gui::ValueStringArray<glm::vec3, 8> 
+        s_kWaterTypesCoeffsAccurate{
         { glm::vec3{0.420, 0.063, 0.019},
           glm::vec3{0.465, 0.089, 0.068},
           glm::vec3{0.520, 0.120, 0.135},
@@ -347,7 +354,6 @@ private:
         }
     };
 
-    uint32_t m_BaseScatterCoefIndex{ 0 };
     // Scattering coefficient at wavelength0 = 514 nm for water types, [PA01]
     //  in m^-1
     static constexpr gui::ValueStringArray<float, 3> s_kScatterCoefLambda0 {
@@ -355,48 +361,46 @@ private:
         { "I: Clear ocean", "1: Coastal ocean", "9: Turbid harbor" }
     };
 
-    glm::vec3 ComputeScatteringCoefPA01(float b_lambda0) const
+    uint32_t m_WaterTypeCoefIndex{ 0 };
+    uint32_t m_BaseScatterCoefIndex{ 0 };
+
+    static glm::vec3 ComputeScatteringCoefPA01(float b_lambda0)
     {
-        return b_lambda0 * ( (-0.00113f * s_kWavelengthsRGB_nm + 1.62517f)
+        return b_lambda0 * ( (-0.00113 * s_kWavelengthsRGB_nm + 1.62517f)
                             /
-                             (-0.00113f * 514.0f               + 1.62517f) );
+                             (-0.00113 * 514.0               + 1.62517) );
     }
 
     /**
      * @param b Scattering coefficient for each wavelength, in m^-1
      * @return Backscattering coefficient for each wavelength, from [PA01]
      */
-    glm::vec3 ComputeBackscatteringCoefPA01(const glm::vec3& b) const
+    static glm::vec3 ComputeBackscatteringCoefPA01(const glm::vec3& b)
     {
-        return 0.01829f * b + 0.00006f;
+        return 0.01829 * b + 0.00006f;
     }
 
     /**
      * @param C pigment concentration for an open water type, [mg/m^3]
-     * @return Backscattering coefficient based on eqs.:24,25,26 in [PA01]
+     * @return Backscattering coefficient based on eqs.:24,25,26 [PA01]
      */
-    glm::vec3 ComputeBackscatteringCoefPigmentPA01(float C) const
+    static glm::vec3 ComputeBackscatteringCoefPigmentPA01(float C)
     {
-        // Molecular scattering coefficient of water
-        //  Jerlov Water Types
-        //const glm::vec3 b_w = 5.83f * 0.001f *
-        //                      glm::pow((400.0f / s_kWavelengthsRGB_nm ), glm::vec3(4.322) );
-        // From Figure 4: https://www.oceanopticsbook.info/view/optical-constituents-of-the-ocean/water
-        // const glm::vec3 b_w( 0.00075, 0.002, 0.005);
-
         // Morel. Optical modeling of the upper ocean in relation to its biogenus
         //  matter content.
         const glm::vec3 b_w( 0.0007, 0.00173, 0.005);
 
         // Ratio of backscattering and scattering coeffiecients of the pigments
         const glm::vec3 B_b = 0.002f + 0.02f * ( 0.5f - 0.25f *
-                                ( (1.0f/glm::log(10.0f)) * glm::log(C) ) // base 10 log
+                                ( (1.0f/glm::log(10.0f)) * glm::log(C) )
                               ) * ( 550.0f / s_kWavelengthsRGB_nm );
         // Scattering coefficient of the pigment
         const float b_p = 0.3f * glm::pow(C, 0.62f);
 
         return 0.5 * b_w + B_b * b_p;
     }
+
+    // =========================================================================
 
 };
 
