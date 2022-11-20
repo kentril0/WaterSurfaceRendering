@@ -962,7 +962,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
     ImGui::SliderFloat("Sky Intensity",
                        &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
     ImGui::SliderFloat("Specular Intensity",
-                       &m_WaterSurfaceUBO.specularIntensity, 0.f, 100.f);
+                       &m_WaterSurfaceUBO.specularIntensity, 0.f, 3.f);
     ImGui::SliderFloat("Specular Highlights",
                        &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
 
@@ -1001,6 +1001,8 @@ void WaterSurfaceMesh::ShowLightingSettings()
     }
 
     // Terrain
+    ImGui::ColorEdit3("Seabed Base Color",
+                      glm::value_ptr(m_WaterSurfaceUBO.terrainColor));
     ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
                      1.0f, -999.0f, 0.0f);
     ImGui::Checkbox(" Clamp depth to surface height", &m_ClampTerrainDepth);

@@ -259,6 +259,7 @@ private:
     struct WaterSurfaceUBO
     {
         alignas(16) glm::vec3 camPos;
+        alignas(16) glm::vec3 terrainColor{ 0.964, 1.0, 0.824 };
         float terrainDepth{ -999.0};
         alignas(16) glm::vec3 absorpCoef{ s_kWaterTypesCoeffsAccurate[0] };
         alignas(16) glm::vec3 scatterCoef{
@@ -269,7 +270,7 @@ private:
         };
         // -------------------------------------------------
         float skyIntensity      { 1.0 };
-        float specularIntensity { 10.0 };
+        float specularIntensity { 1.0 };
         float specularHighlights{ 32.0 };
         SkyModel::Params sky;
     };
