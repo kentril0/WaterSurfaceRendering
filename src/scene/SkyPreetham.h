@@ -12,7 +12,7 @@
 class SkyPreetham
 {
 public:
-    static constexpr float s_kDefaultTurbidity{ 2.0f };
+    static constexpr float s_kDefaultTurbidity{ 2.5f };
 
     /** @brief Properties of the sky model */
     struct Props
