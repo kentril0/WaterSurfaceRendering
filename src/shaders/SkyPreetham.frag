@@ -52,14 +52,10 @@ vec3 YxyToRGB(const in vec3 Yxy);
 
 void main()
 {
-    //params.screenResolution.xy
     const vec2 kRes = params.resolution;
     const vec2 uv = vec2(gl_FragCoord.x, kRes.y - gl_FragCoord.y);
+    // UVs to [-1,1]
     const vec2 p = (2.0f * uv - kRes.xy) / kRes.y;
-
-    //const vec2 uv = gl_FragCoord.xy / kRes.xy;
-    //const vec2 uv = inUV;
-    //const vec3 p = normalize( vec3(uv*2.0f - 1.0f, params.camFOV) );
 
     const vec3 kViewDir = normalize(
         params.camView * normalize( vec3(p, params.camFOV) )
