@@ -129,7 +129,7 @@ namespace vkp
          */
         void CopyToMapped(const void* srcData,
                           VkDeviceSize size,
-                          void* destAddr = nullptr);
+                          void* destAddr = nullptr) const;
 
         /**
          * @brief Flushes mapped memory range

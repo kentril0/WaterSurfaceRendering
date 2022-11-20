@@ -141,6 +141,12 @@ set(SPIRV_CHECK_CONTEXT      OFF CACHE INTERNAL "" FORCE)
 add_subdirectory(${SHADERC_DIR} ${SHADERC_BINARY_DIR} EXCLUDE_FROM_ALL)
 
 # ----------------------------------------------------------
+# OpenMP
+
+find_package(OpenMP REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+
+# ----------------------------------------------------------
 # FFTW
 # http://www.fftw.org/
 
@@ -171,12 +177,6 @@ set(ENABLE_AVX        ON  CACHE INTERNAL "" FORCE)
 set(ENABLE_AVX2       OFF CACHE INTERNAL "" FORCE)
 
 add_subdirectory(${FFTW_DIR} ${FFTW_BINARY_DIR})
-
-#===============================================================================
-# OpenMP
-
-#find_package(OpenMP REQUIRED)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 # ==============================================================================
 # Header-only
@@ -234,8 +234,10 @@ set(MAIN_SOURCES
     "${MAIN_DIR}/Gui.cpp"
     "${MAIN_CORE_DIR}/Application.cpp"
     "${MAIN_SCENE_DIR}/Camera.cpp"
-    "${MAIN_SCENE_DIR}/WaterSurfaceMesh.cpp"
+    "${MAIN_SCENE_DIR}/SkyPreetham.cpp"
+    "${MAIN_SCENE_DIR}/SkyModel.cpp"
     "${MAIN_SCENE_DIR}/WSTessendorf.cpp"
+    "${MAIN_SCENE_DIR}/WaterSurfaceMesh.cpp"
     "${MAIN_DIR}/WaterSurface.cpp"
     "${MAIN_DIR}/main.cpp"
 )
@@ -268,7 +270,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE imgui
     PRIVATE shaderc
     PRIVATE fftw3f
-    #PRIVATE OpenMP::OpenMP_CXX
+    PRIVATE OpenMP::OpenMP_CXX
 )
 
 target_precompile_headers(${PROJECT_NAME}

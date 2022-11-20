@@ -130,8 +130,8 @@ namespace vkp
         }
     }
     
-    void Buffer::CopyToMapped(const void* data, VkDeviceSize size, 
-                              void* destAddr)
+    void Buffer::CopyToMapped(const void* data, VkDeviceSize size,
+                              void* destAddr) const
     {
         void* dest = destAddr == nullptr ? m_MapAddr : destAddr;
         memcpy(dest, data, static_cast<size_t>(size));

@@ -6,8 +6,11 @@ The application synthetizes a patch of ocean based on a selected surface model w
 ## Features
 
 * Tessendorf's choppy wave surface model generation using FFT on CPU [[1]](#sources)
-* Rendered as a displaced mesh (a grid of vertices)
+    * FFT uses AVX instructions.
+    * The function to compute waves was parallelized using OpenMP.
+* Rendered as a displaced mesh (a grid of vertices).
 * Shading based on article by Baboud, Décoret, oceanic data, optic laws [[3],[2],[1],[4]](#sources)
+    * uses Preetham atmospheric model [5]
 * Simple underwater terrain using value noise to get some details underwater
 * GUI interface - allows for modification of parameters at runtime
 * FPS Camera
@@ -15,6 +18,14 @@ The application synthetizes a patch of ocean based on a selected surface model w
 
 For more info, see Section [How it Works](#how-it-works).
 
+Version 1.2 with Preetham model [5] (and other corrections):
+|   |   |
+|---|---|
+|![alt text](docs/figures/1.2/1-clear-sky.png)|![alt text](docs/figures/1.2/2-sunset.png)|
+|![alt text](docs/figures/1.2/3-shallow-clear.png)|![alt text](docs/figures/1.2/4-shallow-turbid.png)|
+
+
+Previous versions:
 |   |   |
 |---|---|
 |![alt text](docs/figures/1-after-open.png)|![alt text](docs/figures/2-close-sunset.png)|
@@ -26,6 +37,7 @@ Profiling window:
 ![alt text](docs/figures/profiling-window.png)
 * Profiling data structure tracks the duration of each unique profiling record ordered by the most recently updated.
 * Using i5-6200U (2-core, 4 threads) CPU with AVX enabled and NVIDIA GT 940M, at 512x512 tile resolution the application runs at ~34 FPS. There is lot of room for optimization. 
+* In version 1.2, function to compute waves was parallelized using OpenMP. Time to compute the waves decreased considerably. On the same system, the application runs at ~46 FPS.
 
 
 ### TODO: possible features in the future

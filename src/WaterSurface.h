@@ -16,6 +16,7 @@
 
 #include "scene/Camera.h"
 #include "scene/WaterSurfaceMesh.h"
+#include "scene/SkyModel.h"
 
 
 class WaterSurface : public vkp::Application
@@ -59,6 +60,7 @@ private:
         void SetupGUI();
         void CreateCamera();
         void CreateWaterSurfaceMesh();
+        void CreateSkyModel();
 
     void UpdateCamera(vkp::Timestep dt);
 
@@ -106,11 +108,16 @@ private:
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
-    static constexpr glm::vec3 s_kCamStartPos{ 0.f, 340.f, -420.f };
+    static const inline glm::vec3 s_kCamStartPos{ 0.0, 100.0, -520.0 };
+    static const inline float s_kCamStartPitch{ glm::radians(-4.0f) };
+    static const inline float s_kCamStartYaw  { glm::radians(88.0f) };
+    static const inline float s_kCamStartFov  { glm::radians(80.0f) };
 
     // Water Surfaces
     std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };
 
+    static const inline glm::vec3 s_kStartSunDir{ 0.0, 0.5, 0.866};
+    std::unique_ptr<SkyModel> m_Sky{ nullptr };
 };
 
 #endif // WATER_SURFACE_RENDERING_WATER_SURFACE_H_

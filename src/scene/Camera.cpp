@@ -9,12 +9,15 @@
 
 namespace vkp
 {
+
     Camera::Camera(float aspectRatio, 
-                   const glm::vec3& pos, const glm::vec3& front, 
+                   const glm::vec3& pos,
+                   const float pitch,
+                   const float yaw,
                    const glm::vec3& up)
       : m_Position(pos), 
-        m_Front(front),
-        m_Up(up),
+        m_Yaw(yaw),
+        m_Pitch(pitch),
         m_AspectRatio(aspectRatio)
     {
         VKP_REGISTER_FUNCTION();
@@ -26,36 +29,32 @@ namespace vkp
 
     void Camera::UpdateVectors()
     {
-        // Calculate the new front vector
-        // Assumes yaw, pitch in radians!
-        m_Front.x = cosf(m_Yaw) * cosf(m_Pitch);
-        m_Front.y = sinf(m_Pitch);
-        m_Front.z = sinf(m_Yaw) * cosf(m_Pitch);
-        m_Front = glm::normalize(m_Front);
+        m_Front = glm::normalize(
+            glm::vec3(
+                glm::cos(m_Yaw) * glm::cos(m_Pitch),
+                glm::sin(m_Pitch),
+                glm::sin(m_Yaw) * glm::cos(m_Pitch)
+            )
+        );
 
         // Re-calculate the right and up vector
-        //  must normalize because their length gets closer to 0 the more you 
+        //  must be normalized because their length gets closer to 0 the more you 
         //  look up or down, results in slower movement
-        m_Right = glm::normalize(glm::cross(m_Front, VEC_WORLD_UP));
+
+        m_Right = glm::normalize(glm::cross(m_Front, s_kVecWorldUp));
         m_Up    = glm::normalize(glm::cross(m_Right, m_Front));
     }
 
     void Camera::Update(float dt)
     {
-        const float velocity = MOVE_SPEED * dt;
+        float velocity = s_kMoveSpeed * dt;
+        const float kSpeedUpAddition = static_cast<float>(m_IsActiveSpeedup) *
+                                       velocity * s_kSpeedupMultiplier;
+        velocity += kSpeedUpAddition;
 
-        // Moving forwards
-        const float speedUpAddition = static_cast<float>(m_IsActiveSpeedup) *
-                                      velocity * SPEEDUP_MULTIPLIER;
-        m_Position += static_cast<float>(m_IsMovingForward) * 
-                      (m_Front * (velocity + speedUpAddition));
-
-        // Moving backwards
-        m_Position -= static_cast<float>(m_IsMovingBackward) * m_Front *
-                      velocity;
-        // Moving right
+        m_Position += static_cast<float>(m_IsMovingForward) * m_Front * velocity;
+        m_Position -= static_cast<float>(m_IsMovingBackward) * m_Front * velocity;
         m_Position += static_cast<float>(m_IsMovingRight) * m_Right * velocity;
-        // Moving Left
         m_Position -= static_cast<float>(m_IsMovingLeft) * m_Right * velocity;
 
         UpdateViewMat();
@@ -72,13 +71,12 @@ namespace vkp
         }
 
         // Calculate the offset movement between the last and current frame
-        float dx = static_cast<float>(x - m_LastX) * MOUSE_SENSITIVITY;
-        float dy = static_cast<float>(m_LastY - y) * MOUSE_SENSITIVITY;
+        float dx = static_cast<float>(x - m_LastX) * s_kMouseSensitivity;
+        float dy = static_cast<float>(m_LastY - y) * s_kMouseSensitivity;
 
         m_LastX = static_cast<int>(x);
         m_LastY = static_cast<int>(y);
 
-        // TODO convert to radians??
         _SetPitch(m_Pitch + glm::radians(dy));
         _SetYaw(m_Yaw + glm::radians(dx));
 
@@ -93,38 +91,15 @@ namespace vkp
 
     void Camera::OnKeyPressed(int key, int action)
     {
-        if (action == GLFW_PRESS)
-        {
-            SetActiveState(key, true);
-        }
-        else if (action == GLFW_RELEASE)
-        {
-            SetActiveState(key, false);
-        }
+        // ASSERT: GLFW_RELEASE == 0, GLFW_PRESS == 1, ...
+        SetActiveState( key, bool(action) );
     }
 
-    void Camera::SetPitch(float deg)
-    { 
-        VKP_REGISTER_FUNCTION();
-        _SetPitch(glm::radians(deg));
-        UpdateVectors();
-        UpdateViewMat();
-    }
-
-    void Camera::SetYaw(float deg)
-    {
-        VKP_REGISTER_FUNCTION();
-        _SetYaw(glm::radians(deg));
-        UpdateVectors();
-        UpdateViewMat();
-    }
-
-    void Camera::SetPerspective(float aspectRatio, float fovDeg, 
+    void Camera::SetPerspective(float aspectRatio, float fov,
                                 float near, float far)
     {
-        VKP_REGISTER_FUNCTION();
         m_AspectRatio = aspectRatio;
-        m_Fov         = glm::radians(fovDeg);
+        m_Fov         = fov;
         m_Near        = near;
         m_Far         = far;
         UpdateProjMat();
@@ -132,28 +107,24 @@ namespace vkp
 
     void Camera::SetAspectRatio(float aspect)
     {
-        VKP_REGISTER_FUNCTION();
         m_AspectRatio = aspect;
         UpdateProjMat();
     }
 
-    void Camera::SetFov(float fovRad)
+    void Camera::SetFov(float fov)
     {
-        VKP_REGISTER_FUNCTION();
-        m_Fov = fovRad;
+        m_Fov = fov;
         UpdateProjMat();
     }
 
     void Camera::SetNear(float dist)
     {
-        VKP_REGISTER_FUNCTION();
         m_Near = dist;
         UpdateProjMat();
     }
 
     void Camera::SetFar(float dist)
     {
-        VKP_REGISTER_FUNCTION();
         m_Far = dist;
         UpdateProjMat();
     }
