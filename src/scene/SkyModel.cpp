@@ -347,7 +347,7 @@ void SkyModel::ShowGUISettings()
 
 void SkyModel::ShowLightingSettings()
 {
-    static float sunAzimuth = glm::radians(0.0f);        // [-pi, pi]
+    static float sunAzimuth = glm::radians(90.0f);        // [-pi, pi]
     static float sunInclination = glm::radians(0.0f);    // [-pi/2, pi/2]
     static glm::vec3 sunDir = m_Sky->GetSunDirection();
 
