@@ -753,169 +753,188 @@ void WaterSurfaceMesh::CopyModelTessDataToStagingBuffer()
     );
 }
 
-// -----------------------------------------------------------------------------
+void WaterSurfaceMesh::RecompileShaders(
+    VkRenderPass renderPass,
+    const VkExtent2D kFramebufferExtent,
+    const bool kFramebufferHasDepthAttachment
+)
+{
+    bool kNeedsRecreation = m_Pipeline->RecompileShaders();
+    if (kNeedsRecreation)
+    {
+        CreatePipeline(kFramebufferExtent,
+                       renderPass,
+                       kFramebufferHasDepthAttachment);
+    }
+}
+
+// =============================================================================
 // GUI
 
 void WaterSurfaceMesh::ShowGUISettings()
 {
-    ShowWaterSurfaceSettings();
-    ShowMeshSettings();
-    ShowLightingSettings();
-}
-
-void WaterSurfaceMesh::ShowWaterSurfaceSettings()
-{
-    if (ImGui::CollapsingHeader("Water Surface settings",
+    if (ImGui::CollapsingHeader("Water Surface Settings",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
-        static int tileRes = s_kWSResolutions.GetIndex(m_TileSize);
-        const char* resName =
-            (tileRes >= 0 && tileRes < s_kWSResolutions.size())
-            ? s_kWSResolutions.strings[tileRes]
-            : "Unknown";
-
-        static float tileLen = m_ModelTess->GetTileLength();
-        static glm::vec2 windDir = m_ModelTess->GetWindDir();
-        static float windSpeed = m_ModelTess->GetWindSpeed();
-        static float animPeriod = m_ModelTess->GetAnimationPeriod();
-        static float phillipsA = m_ModelTess->GetPhillipsConst() * 1e7;
-        static float damping = m_ModelTess->GetDamping();
-        static float lambda = m_ModelTess->GetDisplacementLambda();
-
         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+            ShowWaterSurfaceSettings();
+        ImGui::PopItemWidth();
+        ImGui::NewLine();
+    }
 
-        ImGui::SliderInt("Sample Resolution", &tileRes, 0,
-                         s_kWSResolutions.size() -1, resName);
-        ImGui::DragFloat("Tile Length", &tileLen, 2.0f, 0.0f, 1024.0f, "%.0f");
-        // TODO unit
-        // TODO 2 angles
-        ImGui::DragFloat2("Wind Direction", glm::value_ptr(windDir),
-                          0.1f, 0.0f, 0.0f, "%.1f");
-        ImGui::DragFloat("Wind Speed", &windSpeed, 0.1f);
-        ImGui::DragFloat("Choppy correction", &lambda,
-                              0.1f, -8.0f, 8.0f, "%.1f");
-        ImGui::DragFloat("Animation Period", &animPeriod, 1.0f, 1.0f, 0.0f, "%.0f");
-        ImGui::DragFloat("Animation speed", &m_AnimSpeed, 0.1f, 0.1f, 8.0f);
-        ImGui::Checkbox(" Play Animation ", &m_PlayAnimation);
-
-        if (ImGui::TreeNodeEx("Phillips Spectrum", 
-                              ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::DragFloat("Amplitude (10^-7)", &phillipsA, 0.1f, 1.0f, 10.0f,
-                             "%.2f");
-            ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
-                             "%.4f");
-            ImGui::TreePop();
-        }
-
-        if (ImGui::Button("Apply"))
-        {
-            const uint32_t kNewSize = s_kWSResolutions[tileRes];
-            const bool kTileSizeChanged = kNewSize != m_ModelTess->GetTileSize();
-
-            const bool kTileLengthChanged =
-                glm::epsilonNotEqual(tileLen, m_ModelTess->GetTileLength(),
-                                     0.001f);
-            const bool kWindDirChanged =
-                glm::any( glm::epsilonNotEqual(windDir, m_ModelTess->GetWindDir(),
-                                     glm::vec2(0.001f) ) );
-            const bool kWindSpeedChanged =
-                glm::epsilonNotEqual(windSpeed, m_ModelTess->GetWindSpeed(),
-                                     0.001f);
-            const bool kAnimationPeriodChanged =
-                glm::epsilonNotEqual(animPeriod,
-                                     m_ModelTess->GetAnimationPeriod(), 0.001f);
-            const bool kPhillipsConstChanged =
-                glm::epsilonNotEqual(phillipsA * 1e-7f,
-                                     m_ModelTess->GetPhillipsConst(), 1e-8f);
-            const bool kDampingChanged =
-                glm::epsilonNotEqual(damping,
-                                     m_ModelTess->GetDamping(),
-                                     0.001f);
-
-            const bool kNeedsPrepare =
-                kTileSizeChanged ||
-                kTileLengthChanged ||
-                kWindDirChanged ||
-                kWindSpeedChanged ||
-                kAnimationPeriodChanged ||
-                kPhillipsConstChanged ||
-                kDampingChanged;
-
-            if (kTileSizeChanged)
-            {
-                m_ModelTess->SetTileSize(kNewSize);
-
-                const uint32_t kIndex =
-                    s_kWSResolutions.GetIndex(m_ModelTess->GetTileSize());
-                m_CurFrameMap = &m_FrameMaps[kIndex];
-                SetDescriptorSetsDirty();
-            }
-
-            if (kNeedsPrepare)
-            {
-                m_ModelTess->SetTileSize(s_kWSResolutions[tileRes]);
-                m_ModelTess->SetTileLength(tileLen);
-                m_ModelTess->SetWindDirection(windDir);
-                m_ModelTess->SetWindSpeed(windSpeed);
-                m_ModelTess->SetAnimationPeriod(animPeriod);
-                m_ModelTess->SetPhillipsConst(phillipsA * 1e-7);
-                m_ModelTess->SetDamping(damping);
-
-                m_ModelTess->Prepare();
-                m_FrameMapNeedsUpdate = true;
-            }
-
-            m_ModelTess->SetLambda(lambda);
-        }
-
+    if (ImGui::CollapsingHeader("Mesh Settings",
+                                ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+            ShowMeshSettings();
         ImGui::PopItemWidth();
         ImGui::NewLine();
     }
 }
 
-void WaterSurfaceMesh::ShowMeshSettings()
+void WaterSurfaceMesh::ShowWaterSurfaceSettings()
 {
-    if (ImGui::CollapsingHeader("Mesh settings",
-                                ImGuiTreeNodeFlags_DefaultOpen))
+    static int tileRes = s_kWSResolutions.GetIndex(m_TileSize);
+    const char* resName =
+        (tileRes >= 0 && tileRes < s_kWSResolutions.size())
+        ? s_kWSResolutions.strings[tileRes]
+        : "Unknown";
+
+    static float tileLen = m_ModelTess->GetTileLength();
+    static glm::vec2 windDir = m_ModelTess->GetWindDir();
+    static float windSpeed = m_ModelTess->GetWindSpeed();
+    static float animPeriod = m_ModelTess->GetAnimationPeriod();
+    static float phillipsA = m_ModelTess->GetPhillipsConst() * 1e7;
+    static float damping = m_ModelTess->GetDamping();
+    static float lambda = m_ModelTess->GetDisplacementLambda();
+
+    ImGui::SliderInt("Patch Resolution", &tileRes, 0,
+                     s_kWSResolutions.size() -1, resName);
+    ImGui::DragFloat("Waves' Length", &tileLen, 2.0f, 0.0f, 1024.0f, "%.0f");
+    // TODO unit
+    // TODO 2 angles
+    ImGui::DragFloat2("Wind Direction", glm::value_ptr(windDir),
+                      0.1f, 0.0f, 0.0f, "%.1f");
+    ImGui::DragFloat("Wind Speed", &windSpeed, 0.1f);
+    ImGui::DragFloat("Choppy correction", &lambda,
+                          0.1f, -8.0f, 8.0f, "%.1f");
+    ImGui::DragFloat("Animation Period", &animPeriod, 1.0f, 1.0f, 0.0f, "%.0f");
+    ImGui::DragFloat("Animation speed", &m_AnimSpeed, 0.1f, 0.1f, 8.0f);
+
+    if ( ImGui::TreeNodeEx("Phillips Spectrum") )
+                          //, ImGuiTreeNodeFlags_DefaultOpen))
     {
-        static int tileRes = s_kWSResolutions.GetIndex(m_TileSize) +1;
-        static float tileLength = WSTessendorf::s_kDefaultTileLength;
-        static float vertexDist = tileLength / static_cast<float>(m_TileSize);
+        ImGui::DragFloat("Amplitude (10^-7)", &phillipsA, 0.1f, 1.0f, 10.0f,
+                         "%.2f");
+        ImGui::DragFloat("Damping factor", &damping, 0.0001f, 0.0f, 1.0f,
+                         "%.4f");
+        ImGui::TreePop();
+    }
 
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+    if ( ImGui::TreeNodeEx("Water Properties and Lighting") )
+                          //, ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ShowLightingSettings();
+        ImGui::TreePop();
+    }
 
-        tileRes = glm::clamp(tileRes, 0, (int)(s_kWSResolutions.size()-1));
-        const char* resName = s_kWSResolutions.strings[tileRes];
+    ImGui::Checkbox(" Play Animation ", &m_PlayAnimation);
 
-        ImGui::SliderInt("Tile Resolution", &tileRes, 0,
-                         s_kWSResolutions.size() -1, resName);
-        int tileSize = s_kWSResolutions[tileRes];
+    if (ImGui::Button("Apply"))
+    {
+        const uint32_t kNewSize = s_kWSResolutions[tileRes];
+        const bool kTileSizeChanged = kNewSize != m_ModelTess->GetTileSize();
 
-        ImGui::DragFloat("Tile Length##1", &tileLength, 10.f, 10.f, 10000.0f);
-        vertexDist = tileLength / static_cast<float>(tileSize);
+        const bool kTileLengthChanged =
+            glm::epsilonNotEqual(tileLen, m_ModelTess->GetTileLength(),
+                                 0.001f);
+        const bool kWindDirChanged =
+            glm::any( glm::epsilonNotEqual(windDir, m_ModelTess->GetWindDir(),
+                                 glm::vec2(0.001f) ) );
+        const bool kWindSpeedChanged =
+            glm::epsilonNotEqual(windSpeed, m_ModelTess->GetWindSpeed(),
+                                 0.001f);
+        const bool kAnimationPeriodChanged =
+            glm::epsilonNotEqual(animPeriod,
+                                 m_ModelTess->GetAnimationPeriod(), 0.001f);
+        const bool kPhillipsConstChanged =
+            glm::epsilonNotEqual(phillipsA * 1e-7f,
+                                 m_ModelTess->GetPhillipsConst(), 1e-8f);
+        const bool kDampingChanged =
+            glm::epsilonNotEqual(damping,
+                                 m_ModelTess->GetDamping(),
+                                 0.001f);
 
-        ImGui::DragFloat("Vertex Distance", &vertexDist, 0.1f, 0.1f, 100.0f);
-        tileLength = vertexDist * tileSize;
+        const bool kNeedsPrepare =
+            kTileSizeChanged ||
+            kTileLengthChanged ||
+            kWindDirChanged ||
+            kWindSpeedChanged ||
+            kAnimationPeriodChanged ||
+            kPhillipsConstChanged ||
+            kDampingChanged;
 
-        // TODO auto
-        if (ImGui::Button("Apply##1"))
+        if (kTileSizeChanged)
         {
-            const bool kNeedsRegeneration = 
-                tileSize != static_cast<int>(m_TileSize) ||
-                glm::epsilonNotEqual(vertexDist, m_VertexDistance, 0.0001f);
+            m_ModelTess->SetTileSize(kNewSize);
 
-            if (kNeedsRegeneration)
-            {
-                m_TileSize = tileSize;
-                m_VertexDistance = vertexDist;
-
-                GenerateMeshVerticesIndices();
-            }
+            const uint32_t kIndex =
+                s_kWSResolutions.GetIndex(m_ModelTess->GetTileSize());
+            m_CurFrameMap = &m_FrameMaps[kIndex];
+            SetDescriptorSetsDirty();
         }
 
-        ImGui::PopItemWidth();
-        ImGui::NewLine();
+        if (kNeedsPrepare)
+        {
+            m_ModelTess->SetTileSize(s_kWSResolutions[tileRes]);
+            m_ModelTess->SetTileLength(tileLen);
+            m_ModelTess->SetWindDirection(windDir);
+            m_ModelTess->SetWindSpeed(windSpeed);
+            m_ModelTess->SetAnimationPeriod(animPeriod);
+            m_ModelTess->SetPhillipsConst(phillipsA * 1e-7);
+            m_ModelTess->SetDamping(damping);
+
+            m_ModelTess->Prepare();
+            m_FrameMapNeedsUpdate = true;
+        }
+
+        m_ModelTess->SetLambda(lambda);
+    }
+}
+
+void WaterSurfaceMesh::ShowMeshSettings()
+{
+    static int tileRes = s_kWSResolutions.GetIndex(m_TileSize) +1;
+    static float tileLength = WSTessendorf::s_kDefaultTileLength;
+    static float vertexDist = tileLength / static_cast<float>(m_TileSize);
+
+    tileRes = glm::clamp(tileRes, 0, (int)(s_kWSResolutions.size()-1));
+    const char* resName = s_kWSResolutions.strings[tileRes];
+
+    ImGui::SliderInt("Grid Resolution", &tileRes, 0,
+                     s_kWSResolutions.size() -1, resName);
+    int tileSize = s_kWSResolutions[tileRes];
+
+    ImGui::DragFloat("Grid Side Length", &tileLength, 10.f, 10.f, 10000.0f);
+    vertexDist = tileLength / static_cast<float>(tileSize);
+
+    ImGui::DragFloat("Vertex Distance", &vertexDist, 0.1f, 0.1f, 100.0f);
+    tileLength = vertexDist * tileSize;
+
+    // TODO auto
+    if (ImGui::Button("Apply##1"))
+    {
+        const bool kNeedsRegeneration = 
+            tileSize != static_cast<int>(m_TileSize) ||
+            glm::epsilonNotEqual(vertexDist, m_VertexDistance, 0.0001f);
+
+        if (kNeedsRegeneration)
+        {
+            m_TileSize = tileSize;
+            m_VertexDistance = vertexDist;
+
+            GenerateMeshVerticesIndices();
+        }
     }
 }
 
@@ -940,79 +959,51 @@ static void ShowComboBox(const char* name,
 
 void WaterSurfaceMesh::ShowLightingSettings()
 {
-    if (ImGui::CollapsingHeader("Lighting settings",
-                                ImGuiTreeNodeFlags_DefaultOpen))
+    ImGui::SliderFloat("Sky Intensity",
+                       &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
+    ImGui::SliderFloat("Specular Intensity",
+                       &m_WaterSurfaceUBO.specularIntensity, 0.f, 3.f);
+    ImGui::SliderFloat("Specular Highlights",
+                       &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
+
+    ShowComboBox("Absorption type",
+                 s_kWaterTypesCoeffsAccurate.strings.data(),
+                 s_kWaterTypesCoeffsAccurate.size(),
+                 s_kWaterTypesCoeffsAccurate.strings[m_WaterTypeCoefIndex],
+                 &m_WaterTypeCoefIndex);
+    m_WaterSurfaceUBO.absorpCoef =
+        s_kWaterTypesCoeffsAccurate[m_WaterTypeCoefIndex];
+
+    ShowComboBox("Scattering type",
+                 s_kScatterCoefLambda0.strings.data(),
+                 s_kScatterCoefLambda0.size(),
+                 s_kScatterCoefLambda0.strings[m_BaseScatterCoefIndex],
+                 &m_BaseScatterCoefIndex);
+
+    m_WaterSurfaceUBO.scatterCoef =
+        ComputeScatteringCoefPA01(
+            s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
+
+    static bool usePigment = false;
+    ImGui::Checkbox(" Consider pigment concentration", &usePigment);
+    if (usePigment)
     {
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+        static float pigmentC = 1.0;
+        ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
 
-        ImGui::SliderFloat("Sky Intensity",
-                           &m_WaterSurfaceUBO.skyIntensity, 0.f, 10.f);
-        ImGui::SliderFloat("Specular Intensity",
-                           &m_WaterSurfaceUBO.specularIntensity, 0.f, 100.f);
-        ImGui::SliderFloat("Specular Highlights",
-                           &m_WaterSurfaceUBO.specularHighlights, 1.f, 64.f);
-
-        if (ImGui::TreeNodeEx("Water Properties", 
-                              ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ShowComboBox("Absorption type",
-                         s_kWaterTypesCoeffsAccurate.strings.data(),
-                         s_kWaterTypesCoeffsAccurate.size(),
-                         s_kWaterTypesCoeffsAccurate.strings[m_WaterTypeCoefIndex],
-                         &m_WaterTypeCoefIndex);
-            m_WaterSurfaceUBO.absorpCoef =
-                s_kWaterTypesCoeffsAccurate[m_WaterTypeCoefIndex];
-
-            ShowComboBox("Scattering type",
-                         s_kScatterCoefLambda0.strings.data(),
-                         s_kScatterCoefLambda0.size(),
-                         s_kScatterCoefLambda0.strings[m_BaseScatterCoefIndex],
-                         &m_BaseScatterCoefIndex);
-
-            m_WaterSurfaceUBO.scatterCoef =
-                ComputeScatteringCoefPA01(
-                    s_kScatterCoefLambda0[m_BaseScatterCoefIndex]);
-
-            static bool usePigment = true;
-            ImGui::Checkbox(" Consider pigment concentration", &usePigment);
-            if (usePigment)
-            {
-                static float pigmentC = 1.0;
-                ImGui::SliderFloat("Pigment concentration", &pigmentC, 0.001f, 3.f);
-
-                m_WaterSurfaceUBO.backscatterCoef =
-                    ComputeBackscatteringCoefPigmentPA01(pigmentC);
-            }
-            else
-            {
-                m_WaterSurfaceUBO.backscatterCoef =
-                    ComputeBackscatteringCoefPA01(m_WaterSurfaceUBO.scatterCoef);
-            }
-
-            // Terrain
-            ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
-                             1.0f, -999.0f, 0.0f);
-            ImGui::Checkbox(" Clamp depth to surface height", &m_ClampTerrainDepth);
-
-            ImGui::TreePop();
-        }
-
-        ImGui::PopItemWidth();
-        ImGui::NewLine();
+        m_WaterSurfaceUBO.backscatterCoef =
+            ComputeBackscatteringCoefPigmentPA01(pigmentC);
     }
-}
-
-void WaterSurfaceMesh::RecompileShaders(
-    VkRenderPass renderPass,
-    const VkExtent2D kFramebufferExtent,
-    const bool kFramebufferHasDepthAttachment
-)
-{
-    bool kNeedsRecreation = m_Pipeline->RecompileShaders();
-    if (kNeedsRecreation)
+    else
     {
-        CreatePipeline(kFramebufferExtent,
-                       renderPass,
-                       kFramebufferHasDepthAttachment);
+        m_WaterSurfaceUBO.backscatterCoef =
+            ComputeBackscatteringCoefPA01(m_WaterSurfaceUBO.scatterCoef);
     }
+
+    // Terrain
+    ImGui::ColorEdit3("Seabed Base Color",
+                      glm::value_ptr(m_WaterSurfaceUBO.terrainColor));
+    ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
+                     1.0f, -999.0f, 0.0f);
+    ImGui::Checkbox(" Clamp depth to surface height", &m_ClampTerrainDepth);
 }

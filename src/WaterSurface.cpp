@@ -266,13 +266,11 @@ void WaterSurface::CreateCamera()
 
     m_Camera = std::make_unique<vkp::Camera>(
         kSwapChainExtent.width / static_cast<float>(kSwapChainExtent.height),
-        s_kCamStartPos
+        s_kCamStartPos,
+        s_kCamStartPitch,
+        s_kCamStartYaw
     );
-    m_Camera->SetPitch(-60.0f);
-    m_Camera->SetYaw(90.0f);
-    m_Camera->SetFov(1.5);
-    m_Camera->SetNear(0.1f);
-    m_Camera->SetFar(1000.f);
+    m_Camera->SetFov(s_kCamStartFov);
 }
 
 void WaterSurface::SetupGUI()
@@ -387,6 +385,11 @@ void WaterSurface::OnKeyPressed(int key, int action, int mods)
         else if (key == KeyRecompileShaders)
         {
             m_WaterSurfaceMesh->RecompileShaders(
+                *m_RenderPass,
+                m_SwapChain->GetExtent(),
+                m_SwapChain->HasDepthAttachment()
+            );
+            m_Sky->RecompileShaders(
                 *m_RenderPass,
                 m_SwapChain->GetExtent(),
                 m_SwapChain->HasDepthAttachment()
@@ -519,26 +522,39 @@ void WaterSurface::ShowCameraSettings()
         float camNear = m_Camera->GetNear();
         float camFar = m_Camera->GetFar();
 
-        if (ImGui::DragFloat3("Position", glm::value_ptr(pos), 0.1f))
+        if ( ImGui::DragFloat3("Position", glm::value_ptr(pos), 1.f) )
             m_Camera->SetPosition(pos);
 
         ImGui::InputFloat3("Front", glm::value_ptr(front), "%.3f",
                            ImGuiInputTextFlags_ReadOnly);
 
-        if (ImGui::SliderFloat("Pitch angle", &pitch, -89.f, 89.f, "%.0f deg"))
-            m_Camera->SetPitch(pitch);
+        bool viewChanged =
+            ImGui::SliderAngle("Pitch angle", &pitch,
+                                vkp::Camera::s_kMinPitchDeg,
+                                vkp::Camera::s_kMaxPitchDeg);// "%.0f deg");
 
-        if (ImGui::SliderFloat("Yaw angle", &yaw, 0.f, 360.f, "%.0f deg"))
+        viewChanged |=
+            ImGui::SliderAngle("Yaw angle", &yaw, 0.f,
+                                vkp::Camera::s_kMaxYawDeg);// "%.0f deg");
+
+        bool projChanged =
+            ImGui::SliderAngle("Field of view", &fov, 0.f, 120.f);
+        projChanged |=
+            ImGui::SliderFloat("Near plane", &camNear, 0.f, 10.f);
+        projChanged |=
+            ImGui::SliderFloat("Far plane", &camFar, 100.f, 10000.f);
+
+        if (viewChanged)
+        {
             m_Camera->SetYaw(yaw);
+            m_Camera->SetPitch(pitch);
+            m_Camera->UpdateVectors();
+        }
 
-        if (ImGui::SliderAngle("Field of view", &fov, 0.f, 120.f))
-            m_Camera->SetFov(fov);
-
-        if (ImGui::SliderFloat("Near plane", &camNear, 0.f, 10.f))
-            m_Camera->SetNear(camNear);
-
-        if (ImGui::SliderFloat("Far plane", &camFar, 1000.f, 10000.f))
-            m_Camera->SetFar(camFar);
+        if (projChanged)
+        {
+            m_Camera->SetPerspective(fov, camNear, camFar);
+        }
 
         ImGui::NewLine();
     }

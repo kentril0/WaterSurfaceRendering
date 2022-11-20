@@ -306,7 +306,22 @@ void SkyModel::CreatePipeline(
                        false);
 }
 
-// -----------------------------------------------------------------------------
+void SkyModel::RecompileShaders(
+    VkRenderPass renderPass,
+    const VkExtent2D kFramebufferExtent,
+    const bool kFramebufferHasDepthAttachment
+)
+{
+    const bool kNeedsRecreation = m_Pipeline->RecompileShaders();
+    if (kNeedsRecreation)
+    {
+        CreatePipeline(kFramebufferExtent,
+                       renderPass,
+                       kFramebufferHasDepthAttachment);
+    }
+}
+
+// =============================================================================
 // GUI
 
 static glm::vec3 GetDirFromAngles(float inclination, float azimuth)
@@ -318,9 +333,21 @@ static glm::vec3 GetDirFromAngles(float inclination, float azimuth)
     );
 }
 
+void SkyModel::ShowGUISettings()
+{
+    if ( ImGui::CollapsingHeader("Lighting Settings") )
+                                //, ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+            ShowLightingSettings();
+        ImGui::PopItemWidth();
+        ImGui::NewLine();
+    }
+}
+
 void SkyModel::ShowLightingSettings()
 {
-    static float sunAzimuth = glm::radians(0.0f);        // [-pi, pi]
+    static float sunAzimuth = glm::radians(90.0f);        // [-pi, pi]
     static float sunInclination = glm::radians(0.0f);    // [-pi/2, pi/2]
     static glm::vec3 sunDir = m_Sky->GetSunDirection();
 
@@ -354,20 +381,5 @@ void SkyModel::ShowLightingSettings()
         m_Sky->SetTurbidity(turbidity);
         m_Sky->Update();
         UpdateSkyUBO();
-    }
-}
-
-void SkyModel::RecompileShaders(
-    VkRenderPass renderPass,
-    const VkExtent2D kFramebufferExtent,
-    const bool kFramebufferHasDepthAttachment
-)
-{
-    const bool kNeedsRecreation = m_Pipeline->RecompileShaders();
-    if (kNeedsRecreation)
-    {
-        CreatePipeline(kFramebufferExtent,
-                       renderPass,
-                       kFramebufferHasDepthAttachment);
     }
 }

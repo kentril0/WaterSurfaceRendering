@@ -56,10 +56,7 @@ public:
         VkCommandBuffer cmdBuffer);
 
     // @pre Called inside ImGui Window scope
-    void ShowGUISettings()
-    {
-        ShowLightingSettings();
-    }
+    void ShowGUISettings();
 
     void RecompileShaders(
         VkRenderPass renderPass,

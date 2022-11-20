@@ -108,7 +108,10 @@ private:
     // Assets
 
     std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
-    static const inline glm::vec3 s_kCamStartPos{ 0.0, 340.0, -420.0 };
+    static const inline glm::vec3 s_kCamStartPos{ 0.0, 100.0, -520.0 };
+    static const inline float s_kCamStartPitch{ glm::radians(-20.0f) };
+    static const inline float s_kCamStartYaw  { glm::radians(90.0f) };
+    static const inline float s_kCamStartFov  { glm::radians(80.0f) };
 
     // Water Surfaces
     std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };
