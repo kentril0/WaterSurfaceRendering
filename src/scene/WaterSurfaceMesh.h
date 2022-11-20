@@ -260,7 +260,7 @@ private:
     {
         alignas(16) glm::vec3 camPos;
         alignas(16) glm::vec3 terrainColor{ 0.964, 1.0, 0.824 };
-        float terrainDepth{ -999.0};
+        float terrainDepth{ -100.0};
         alignas(16) glm::vec3 absorpCoef{ s_kWaterTypesCoeffsAccurate[0] };
         alignas(16) glm::vec3 scatterCoef{
             ComputeScatteringCoefPA01(s_kScatterCoefLambda0[0])

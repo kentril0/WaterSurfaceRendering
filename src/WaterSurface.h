@@ -109,14 +109,14 @@ private:
 
     std::unique_ptr<vkp::Camera> m_Camera{ nullptr };
     static const inline glm::vec3 s_kCamStartPos{ 0.0, 100.0, -520.0 };
-    static const inline float s_kCamStartPitch{ glm::radians(-20.0f) };
-    static const inline float s_kCamStartYaw  { glm::radians(90.0f) };
+    static const inline float s_kCamStartPitch{ glm::radians(-4.0f) };
+    static const inline float s_kCamStartYaw  { glm::radians(88.0f) };
     static const inline float s_kCamStartFov  { glm::radians(80.0f) };
 
     // Water Surfaces
     std::unique_ptr<WaterSurfaceMesh> m_WaterSurfaceMesh{ nullptr };
 
-    static const inline glm::vec3 s_kStartSunDir{ 0.0, 0.9, 0.4};
+    static const inline glm::vec3 s_kStartSunDir{ 0.0, 0.5, 0.866};
     std::unique_ptr<SkyModel> m_Sky{ nullptr };
 };
 

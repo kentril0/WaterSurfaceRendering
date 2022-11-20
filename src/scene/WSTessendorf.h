@@ -33,7 +33,7 @@
 class WSTessendorf
 {
 public:
-    static constexpr uint32_t     s_kDefaultTileSize  { 256 };
+    static constexpr uint32_t     s_kDefaultTileSize  { 512 };
     static constexpr float        s_kDefaultTileLength{ 1000.0f };
 
     static inline const glm::vec2 s_kDefaultWindDir{ 1.0f, 1.0f };
