@@ -33,7 +33,8 @@ float SaturateDot(const in vec3 v, const in vec3 u)
 
 vec3 ComputePerezLuminanceYxy(const in float theta, const in float gamma)
 {
-    return (1.f + params.A * exp( params.B / cos(theta) ) ) *
+    const float kBias = 1e-3f;
+    return (1.f + params.A * exp( params.B / (cos(theta)+kBias) ) ) *
            (1.f + params.C * exp( params.D * gamma) +
             params.E * cos(gamma) * cos(gamma) );
 }
@@ -65,8 +66,9 @@ void main()
     const vec3 kSunDisk = params.sunColor *
                           smoothstep(0.997f, 1.0f,
                                      SaturateDot(kViewDir, kSunDir) );
-    
+
     const vec3 kSkyLuminance = YxyToRGB( ComputeSkyLuminance(kSunDir, kViewDir) );
+
     fragColor = vec4(kSkyLuminance * 0.05f + kSunDisk * kSkyLuminance, 1.0);
 
     // Tone mapping
