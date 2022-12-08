@@ -222,7 +222,7 @@ float Fbm4Noise2D(in vec2 p);
 
 float TerrainHeight(const in vec2 p)
 {
-    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.005);
+    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.02f);
 }
 
 vec3 TerrainNormal(const in vec2 p)
@@ -314,7 +314,8 @@ float SaturateDot(const in vec3 v, const in vec3 u)
 
 vec3 ComputePerezLuminanceYxy(const in float theta, const in float gamma)
 {
-    return (1.f + surface.A * exp( surface.B / cos(theta) ) ) *
+    const float kBias = 1e-3f;
+    return (1.f + surface.A * exp( surface.B / (cos(theta)+kBias) ) ) *
            (1.f + surface.C * exp( surface.D * gamma) +
             surface.E * cos(gamma) * cos(gamma) );
 }
