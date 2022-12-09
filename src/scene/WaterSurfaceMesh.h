@@ -253,6 +253,7 @@ private:
         alignas(16) glm::mat4 proj;
         float WSHeightAmp;
         float WSChoppy;
+        float scale{ 1.0f };            ///< Texture scale
     };
     VertexUBO m_VertexUBO{};
 

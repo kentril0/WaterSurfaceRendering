@@ -921,12 +921,16 @@ void WaterSurfaceMesh::ShowMeshSettings()
     ImGui::DragFloat("Vertex Distance", &vertexDist, 0.1f, 0.1f, 100.0f);
     tileLength = vertexDist * tileSize;
 
-    // TODO auto
-    if (ImGui::Button("Apply##1"))
+    static float texScale = m_VertexUBO.scale;
+    ImGui::DragFloat("Texture Scale", &texScale, 0.01f, 0.001f, 100.0f);
+
+    static bool autoApply = false;
+
+    if ( ImGui::Button("Apply##1") || autoApply )
     {
         const bool kNeedsRegeneration = 
             tileSize != static_cast<int>(m_TileSize) ||
-            glm::epsilonNotEqual(vertexDist, m_VertexDistance, 0.0001f);
+            glm::epsilonNotEqual(vertexDist, m_VertexDistance, 1e-3f);
 
         if (kNeedsRegeneration)
         {
@@ -935,7 +939,11 @@ void WaterSurfaceMesh::ShowMeshSettings()
 
             GenerateMeshVerticesIndices();
         }
+
+        m_VertexUBO.scale = texScale;
     }
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto apply", &autoApply);
 }
 
 static void ShowComboBox(const char* name, 
