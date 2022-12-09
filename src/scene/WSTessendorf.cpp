@@ -116,7 +116,7 @@ std::vector<WSTessendorf::BaseWaveHeight>
     VKP_ASSERT(m_WaveVectors.size() == baseWaveHeights.size());
     VKP_ASSERT(baseWaveHeights.size() == gaussRandomArray.size());
 
-    #pragma omp parallel for collapse(2) schedule(guided) num_threads(4)
+    #pragma omp parallel for collapse(2) schedule(guided)
     for (uint32_t m = 0; m < kSize; ++m)
     {
         for (uint32_t n = 0; n < kSize; ++n)
@@ -289,7 +289,7 @@ float WSTessendorf::ComputeWaves(float t)
     float masterMaxHeight = std::numeric_limits<float>::min();
     float masterMinHeight = std::numeric_limits<float>::max();
 
-    #pragma omp parallel
+    #pragma omp parallel shared(masterMaxHeight, masterMinHeight)
     {
         #pragma omp for collapse(2) schedule(static)
         for (uint32_t m = 0; m < kTileSize; ++m)

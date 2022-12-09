@@ -21,16 +21,10 @@ For more info, see Section [How it Works](#how-it-works).
 Version 1.2 with Preetham model [5] (and other corrections):
 |   |   |
 |---|---|
-|![alt text](docs/figures/1.2/1-clear-sky.png)|![alt text](docs/figures/1.2/2-sunset.png)|
-|![alt text](docs/figures/1.2/3-shallow-clear.png)|![alt text](docs/figures/1.2/4-shallow-turbid.png)|
+|![alt text](docs/figures/1.2.1/Calm-clear.png)|![alt text](docs/figures/1.2.1/sunset.png)|
+|![alt text](docs/figures/1.2.1/Calm-turbid.png)|![alt text](docs/figures/1.2.1/default.png)|
+|![alt text](docs/figures/1.2.1/default-calm.png)|![alt text](docs/figures/1.2.1/default-3d.png)|
 
-
-Previous versions:
-|   |   |
-|---|---|
-|![alt text](docs/figures/1-after-open.png)|![alt text](docs/figures/2-close-sunset.png)|
-|![alt text](docs/figures/3-turbid-waters.png)|![alt text](docs/figures/4-default-after-open.png)|
-|![alt text](docs/figures/5-shallow.png)|![alt text](docs/figures/6-open-ocean.png)|
 
 Profiling window:
 
@@ -45,10 +39,8 @@ In no particular order:
 * Endless - solving the tiling artifacts
 * Gerstner waves model (in compute shaders?)
 * Rendering: Ray marched
-* Atmospheric model, e.g. Preetham [5]
-* LOD
+* LOD. anti-aliasing
 * Foam rendering
-* Caustics? terrain plane?
 * Optimization of wave generation, (compute shaders?)
 
 ## Dependencies
