@@ -9,11 +9,12 @@ layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 {
     vec3  camPos;
-    vec3 terrainColor;
-    float terrainDepth;
+    float height;
     vec3 absorpCoef;
     vec3 scatterCoef;
     vec3 backscatterCoef;
+    // ------------- Terrain
+    vec3 terrainColor;
     // ------------ Sky
     float skyIntensity;
     float specularIntensity;
@@ -42,7 +43,8 @@ layout(set = 0, binding = 1) uniform WaterSurfaceUBO
 
 #define NORMAL_WORLD_UP vec3(0.0, 1.0, 0.0)
 
-vec4 kTerrainBoundPlane = vec4(NORMAL_WORLD_UP, surface.terrainDepth);
+#define TERRAIN_HEIGHT 0.0f
+vec4 kTerrainBoundPlane = vec4(NORMAL_WORLD_UP, TERRAIN_HEIGHT);
 
 struct Ray
 {
@@ -199,10 +201,11 @@ vec3 ComputeWaterSurfaceColor(
 
 void main ()
 {
-    const Ray ray = Ray(surface.camPos, normalize(inPos.xyz-surface.camPos));
+    const Ray ray = Ray(surface.camPos, normalize(inPos.xyz - surface.camPos));
     const vec3 kNormal = normalize( inNormal );
 
-    vec3 color = ComputeWaterSurfaceColor(ray, inPos.xyz, kNormal);
+    const vec3 p_w = vec3(inPos.x, inPos.y + surface.height, inPos.z);
+    vec3 color = ComputeWaterSurfaceColor(ray, p_w, kNormal);
 
     // TODO foam
     if (inPos.w < 0.0)
@@ -222,7 +225,7 @@ float Fbm4Noise2D(in vec2 p);
 
 float TerrainHeight(const in vec2 p)
 {
-    return surface.terrainDepth - 4.f * Fbm4Noise2D(p.yx * 0.02f);
+    return TERRAIN_HEIGHT - 8.f * Fbm4Noise2D(p.yx * 0.02f);
 }
 
 vec3 TerrainNormal(const in vec2 p)

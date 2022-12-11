@@ -260,8 +260,7 @@ private:
     struct WaterSurfaceUBO
     {
         alignas(16) glm::vec3 camPos;
-        alignas(16) glm::vec3 terrainColor{ 0.964, 1.0, 0.824 };
-        float terrainDepth{ -100.0};
+        float height{ 50.0f };
         alignas(16) glm::vec3 absorpCoef{ s_kWaterTypesCoeffsAccurate[0] };
         alignas(16) glm::vec3 scatterCoef{
             ComputeScatteringCoefPA01(s_kScatterCoefLambda0[0])
@@ -270,6 +269,7 @@ private:
             ComputeBackscatteringCoefPA01(scatterCoef)
         };
         // -------------------------------------------------
+        alignas(16) glm::vec3 terrainColor{ 0.964, 1.0, 0.824 };
         float skyIntensity      { 1.0 };
         float specularIntensity { 1.0 };
         float specularHighlights{ 32.0 };
@@ -280,7 +280,7 @@ private:
     // -------------------------------------------------------------------------
     // GUI stuff
 
-    bool m_ClampTerrainDepth{ true };
+    bool m_ClampHeight{ true };
 
     // Should correspond to s_kMaxTileSize and s_kMinTileSize range
     static const inline gui::ValueStringArray<uint32_t, 7> s_kWSResolutions{
