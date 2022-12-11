@@ -113,7 +113,7 @@ public:
     void UpdateDeviceIndexBuffer(vkp::Buffer& stagingBuffer,
                                  VkCommandBuffer cmdBuffer)
     {
-        StageCopyVerticesToVertexBuffer(stagingBuffer, cmdBuffer);
+        StageCopyIndicesToIndexBuffer(stagingBuffer, cmdBuffer);
     }
 
     const std::vector<T>& GetVertices() const { return m_Vertices; }
