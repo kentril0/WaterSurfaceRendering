@@ -172,10 +172,11 @@ void WaterSurfaceMesh::PrepareRender(
     m_VertexUBO.WSChoppy = m_ModelTess->GetDisplacementLambda();
     
     m_WaterSurfaceUBO.camPos = camPos;
-    if (m_ClampTerrainDepth)
+    if (m_ClampHeight)
     {
-        m_WaterSurfaceUBO.terrainDepth = glm::min(m_WaterSurfaceUBO.terrainDepth,
-                                                  m_ModelTess->GetMinHeight());
+        m_WaterSurfaceUBO.height =
+            glm::max(m_WaterSurfaceUBO.height,
+                     glm::abs( m_ModelTess->GetMinHeight()) );
     }
     m_WaterSurfaceUBO.sky = skyParams;
     
@@ -1011,7 +1012,7 @@ void WaterSurfaceMesh::ShowLightingSettings()
     // Terrain
     ImGui::ColorEdit3("Seabed Base Color",
                       glm::value_ptr(m_WaterSurfaceUBO.terrainColor));
-    ImGui::DragFloat("Ocean depth", &m_WaterSurfaceUBO.terrainDepth,
-                     1.0f, -999.0f, 0.0f);
-    ImGui::Checkbox(" Clamp depth to surface height", &m_ClampTerrainDepth);
+    ImGui::DragFloat("Rest Ocean Level", &m_WaterSurfaceUBO.height,
+                     1.0f, 0.0f, 1000.0f);
+    ImGui::Checkbox(" Clamp to wave height", &m_ClampHeight);
 }
